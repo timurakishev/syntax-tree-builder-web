@@ -1,0 +1,9 @@
+{
+  "name": "syntax-tree-builder-web",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/model.test.mjs"
+  }
+}

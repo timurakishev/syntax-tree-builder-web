@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Syntax Tree Builder</title>
+<link rel="icon" href="assets/SyntaxTreeBuilder.png" />
+<link rel="stylesheet" href="styles.css" />
+
+</head>
+<body>
+<div id="app">
+ 
+ <header>
+  <img class="brandmark" alt="Syntax Tree Builder tree icon" src="assets/SyntaxTreeBuilder.png" />
+  <div class="brand">Syntax Tree Builder</div><div class="header-sep"></div>
+  <div class="header-actions">
+   <button id="openBtn">Open Progress</button><button id="saveBtn">Save Progress</button><button id="pngBtn">Export PNG</button>
+  </div><div class="header-sep"></div>
+  <div class="header-actions"><button id="undoBtn">↶ &nbsp;Undo</button><button id="redoBtn">↷ &nbsp;Redo</button></div><div class="flex-spacer"></div>
+  
+ </header>
+ <nav class="modebar"><button id="freeTab" class="mode-tab">Free Mode</button><button id="practiceTab" class="mode-tab">Practice/Exam Mode</button><button id="aboutBtn" class="mode-tab">About</button><div class="flex-spacer"></div><div id="modeDesc" class="mode-descr">Complete instructor-assigned Excel worksheets.</div></nav>
+ <div class="layout">
+  <aside id="leftSide" class="sidebar left">
+   <div class="side-top"><button id="leftToggle" class="tiny" aria-label="Collapse worksheet sidebar" title="Collapse worksheet sidebar">◀</button></div>
+   <div class="sidebar-body">
+    <div class="side-heading">WORKSHEET</div><button class="wide primary-soft" id="importBtn">Import XLSX worksheet</button><p class="muted" id="bankName">No worksheet imported</p>
+    <div class="side-heading">YOUR PROGRESS</div><div class="progress-lines" id="progressText">Import an Excel worksheet to begin.</div>
+    <div class="side-heading">EXERCISE NAVIGATION</div><div class="nav-buttons"><button id="prevBtn">← Previous</button><button id="nextBtn">Save &amp; Next →</button></div>
+    <div class="jump" id="jumpPanel" hidden><label for="jumpInput">Save and Go to:</label><input id="jumpInput" placeholder="3b" value="" maxlength="8" aria-label="Exercise number" /><span id="jumpTotal">/ 0</span><button class="primary-soft" id="jumpBtn" title="Go to exercise">→</button></div>
+   </div>
+  </aside>
+  <section class="workspace">
+   <div class="strip"><div id="selectionText" class="context">Click a node to select it</div><div class="flex-spacer"></div><span class="tip">Double-click node: Edit label</span><div class="zoomgroup"><button class="icon-only" id="zoomOut" title="Zoom out">−</button><button class="icon-only" id="zoomIn" title="Zoom in">+</button></div></div>
+   <div class="sentencebar" id="sentenceBar" hidden><strong id="exerciseNumber">Exercise</strong><span id="sentenceText"></span><button id="duplicateBtn">Duplicate</button></div>
+   <div class="drawing-area" id="drawingArea">
+     <div class="scroll-canvas" id="scrollCanvas"><div class="tree-stage" id="treeStage"><svg class="tree" id="treeSvg" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Editable syntax tree"></svg></div></div>
+     <div class="placeholder" id="placeholder" hidden>Practice/Exam Mode<br><br>Import an instructor worksheet (.xlsx) using the button on the left.<br>Each sentence or phrase will open as a separate exercise.</div>
+     <div class="floatingbar" id="floatingBar" aria-label="Floating Tree Tools"><div class="float-grip" id="floatGrip" title="Drag to move floating toolbar">⠿</div><div id="floatingButtons" style="display:contents"></div></div>
+   </div>
+   <div class="footer"><div class="footer-info" id="bottomInfo"></div><button class="floating-toggle" id="floatingToggle">Floating tools: On</button></div>
+  </section>
+  <aside id="rightSide" class="sidebar right"><div class="side-top"><button id="rightToggle" class="tiny" title="Collapse Tree Tools sidebar">▶</button></div><div class="sidebar-body"><div class="side-heading">TREE TOOLS</div><div class="tools" id="sidebarTools"></div></div></aside>
+ </div>
+</div>
+<div class="overlay" id="overlay" aria-hidden="true"><div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialogTitle"><div class="dialog-header"><span id="dialogTitle">Edit</span><button id="closeDialog" aria-label="Close dialog">×</button></div><div class="dialog-body" id="dialogBody"></div><div class="dialog-footer" id="dialogFooter"></div></div></div>
+<div class="toast" id="toast" role="status"></div>
+<input type="file" id="openFile" accept=".json,.stb.json" hidden />
+<input type="file" id="importFile" accept=".xlsx" hidden />
+<div class="context-menu" id="contextMenu" hidden></div>
+<div class="context-menu submenu" id="subMenu" hidden></div>
+<script type="module" src="app.js"></script>
+</body>
+</html>
