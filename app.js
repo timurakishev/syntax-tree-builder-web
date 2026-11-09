@@ -28,7 +28,7 @@ let selectedUid=null, undoStack=[], redoStack=[];
 let lastTouchNode=null, lastTouchTime=0, lastTouchOpenTime=0;
 let bankName='No worksheet imported', sentences=[], exerciseIds=[], originalCount=0;
 let currentIndex=0, workingTrees={}, workHandle=null, workFilename=null;
-let zoom=1, leftCollapsed=false,rightCollapsed=false, floatingVisible=true;
+let zoom=1, leftCollapsed=false,rightCollapsed=false;
 let floatingPosition=null, toastTimer=null;
 let sceneWidth=900,sceneHeight=580;
 let scrollReset=false, menuOpen=false;
@@ -396,7 +396,7 @@ function deleteNode(){
   selectedUid=parent.uid;afterEdit();
 }
 async function resetTree(){
-  if(!ready()||!await confirmDialog('Reset tree','Discard the current tree and start again with an empty root?'))return;
+  if(!ready()||!await confirmDialog('Reset tree','Discard the current tree and all comments and start again with an empty root?'))return;
   checkpoint();root=makeNode('?');selectedUid=null;afterEdit();
 }
 function runTool(name,anchor){
@@ -459,6 +459,49 @@ function duplicateExercise(){
   currentIndex=insertAt;root=normalizeNode(workingTrees[insertAt]);
   selectedUid=null;undoStack=[];redoStack=[];scrollReset=true;render();
   if(workFilename)saveProgress(false);
+}
+
+async function deleteDuplicate(){
+  if(mode!=='practice'||!sentences.length)return;
+
+  const label=exerciseIds[currentIndex];
+  if(!/^\d+[a-z]+$/.test(label))return;
+
+  if(!await confirmDialog(
+    'Delete duplicate',
+    `Delete exercise ${label} and its tree? This cannot be undone.`
+  ))return;
+
+  const removed=currentIndex;
+  const original=label.replace(/[a-z]+$/,'');
+
+  sentences.splice(removed,1);
+  exerciseIds.splice(removed,1);
+
+  workingTrees=Object.fromEntries(
+    Object.entries(workingTrees)
+      .filter(([index])=>Number(index)!==removed)
+      .map(([index,tree])=>[
+        Number(index)>removed?Number(index)-1:Number(index),
+        tree
+      ])
+  );
+
+  currentIndex=exerciseIds.indexOf(original);
+
+  root=workingTrees[currentIndex]
+    ?normalizeNode(workingTrees[currentIndex])
+    :makeNode('?');
+
+  selectedUid=null;
+  undoStack=[];
+  redoStack=[];
+  scrollReset=true;
+
+  render();
+
+  if(workFilename)await saveProgress(false);
+  else setInfo(`Deleted duplicate exercise ${label}`);
 }
 async function importWorksheet(file){
   try {
@@ -817,11 +860,10 @@ function render(){
   }
   $('jumpPanel').hidden=!(hasBank&&(originalCount>5||sentences.length>originalCount));
   $('sentenceBar').hidden=!hasBank;
+  $('deleteDuplicateBtn').hidden=!hasBank||!/^\d+[a-z]+$/.test(exerciseIds[currentIndex]??'');
   $('scrollCanvas').hidden=!canEdit;
   $('placeholder').hidden=!practice||!!sentences.length;
-  $('floatingBar').hidden=!canEdit||!floatingVisible;
-  $('floatingToggle').textContent=floatingVisible?'Floating tools: On':'Floating tools: Off';
-  $('floatingToggle').classList.toggle('inactive',!floatingVisible);
+  $('floatingBar').hidden=!canEdit;
   $('rightSide').classList.toggle('disabled',!canEdit);
   updateControls();
   if(canEdit){const reset=scrollReset;scrollReset=false;drawTree(reset);}
@@ -950,12 +992,12 @@ function init(){
   $('aboutBtn').onclick=showAbout;
   $('leftToggle').onclick=()=>{leftCollapsed=!leftCollapsed;render();};
   $('rightToggle').onclick=()=>{rightCollapsed=!rightCollapsed;render();};
-  $('floatingToggle').onclick=()=>{floatingVisible=!floatingVisible;render();};
   $('undoBtn').onclick=undo;$('redoBtn').onclick=redo;
   $('zoomIn').onclick=()=>changeZoom(1.15);$('zoomOut').onclick=()=>changeZoom(1/1.15);
   $('prevBtn').onclick=()=>switchExercise(currentIndex-1);
   $('nextBtn').onclick=saveAndNext;
   $('duplicateBtn').onclick=duplicateExercise;
+  $('deleteDuplicateBtn').onclick=deleteDuplicate;
   $('jumpBtn').onclick=saveAndGo;
   $('jumpInput').addEventListener('keydown',event=>{
     if(event.key==='Enter'){event.preventDefault();saveAndGo();}
