@@ -864,16 +864,18 @@ function initFloatingToolbar(){
     if(!drag)return;
 
     const bounds=area.getBoundingClientRect();
-    const pointerX=event.clientX-bounds.left;
-
-    const dockRight=pointerX>=bounds.width-55;
-    const dockLeft=!dockRight&&pointerX<=55;
-
-    bar.classList.toggle('vertical',dockLeft||dockRight);
-    bar.classList.toggle('docked-right',dockRight);
 
     let x=drag.x+event.clientX-drag.startX;
     let y=drag.y+event.clientY-drag.startY;
+
+    bar.classList.remove('vertical','docked-right');
+    const fullWidth=bar.offsetWidth;
+
+    const dockLeft=x<=55;
+    const dockRight=!dockLeft&&x+fullWidth>=bounds.width-55;
+
+    bar.classList.toggle('vertical',dockLeft||dockRight);
+    bar.classList.toggle('docked-right',dockRight);
 
     if(dockLeft){
       x=12;
