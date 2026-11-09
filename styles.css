@@ -189,4 +189,9 @@
   color: #a34545;
   border-color: #e5caca;
 }
-
+/* Exercise navigation buttons */
+.nav-buttons button {
+  font-size: 13px;
+  padding: 12px 6px;
+  min-height: 45px;
+}
