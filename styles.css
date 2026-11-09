@@ -129,3 +129,54 @@
   text-overflow: ellipsis;
 }
 
+/* Bottom bar */
+.footer-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+}
+
+.footer-selection {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.footer-tip {
+  flex-shrink: 0;
+  margin: 0;
+}
+
+.footer-divider {
+  width: 1px;
+  height: 24px;
+  background: #e8edf4;
+  flex-shrink: 0;
+}
+
+.footer-info {
+  flex: 0 1 36%;
+  min-width: 0;
+  text-align: right;
+  color: #667b97;
+  font-size: 12px;
+  font-weight: 500;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Floating tools toggle in the sidebar */
+.sidebar-floating-toggle {
+  display: block;
+  width: 100%;
+  margin-top: 18px;
+  text-align: center;
+}
+
+
