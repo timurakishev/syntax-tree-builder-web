@@ -866,7 +866,7 @@ function initFloatingToolbar(){
     let x=Math.max(6,Math.min(bounds.width-bar.offsetWidth-6,drag.x+event.clientX-drag.startX));
     let y=Math.max(6,Math.min(bounds.height-bar.offsetHeight-6,drag.y+event.clientY-drag.startY));
     bar.classList.remove('docked-right','vertical');
-    if(x<60||x>bounds.width-320){
+    if(x<60||x>bounds.width-bar.offsetWidth-36){
       bar.classList.add('vertical');
       if(x>bounds.width-320){bar.classList.add('docked-right');x=bounds.width-bar.offsetWidth-12;}
       else x=12;
