@@ -45,7 +45,21 @@ function showToast(message){
   const box=$('toast');box.textContent=message;box.classList.add('show');
   clearTimeout(toastTimer);toastTimer=setTimeout(()=>box.classList.remove('show'),3700);
 }
-function setInfo(text){if(text)showToast(text);}
+let infoTimer = null;
+
+function setInfo(text) {
+  const target = $('bottomInfo');
+  if (!target) return;
+
+  clearTimeout(infoTimer);
+  target.textContent = text;
+
+  if (text) {
+    infoTimer = setTimeout(() => {
+      target.textContent = '';
+    }, 7000);
+  }
+}
 function downloadFile(name,content,type){
   const blob=content instanceof Blob?content:new Blob([content],{type});
   const url=URL.createObjectURL(blob),a=document.createElement('a');
