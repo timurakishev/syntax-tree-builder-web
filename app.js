@@ -45,7 +45,7 @@ function showToast(message){
   const box=$('toast');box.textContent=message;box.classList.add('show');
   clearTimeout(toastTimer);toastTimer=setTimeout(()=>box.classList.remove('show'),3700);
 }
-function setInfo(text){$('bottomInfo').textContent=text;}
+function setInfo(text){if(text)showToast(text);}
 function downloadFile(name,content,type){
   const blob=content instanceof Blob?content:new Blob([content],{type});
   const url=URL.createObjectURL(blob),a=document.createElement('a');
