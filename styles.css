@@ -56,3 +56,46 @@
 .context-menu.submenu button{min-width:90px}
 
 [hidden]{display:none!important}
+
+/* Zoom controls in the floating toolbar */
+.float-zoomgroup {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.float-separator {
+  width: 1px;
+  height: 25px;
+  background: #e8edf4;
+  margin: 0 4px;
+  flex-shrink: 0;
+}
+
+.float-zoom {
+  font-size: 22px;
+  font-weight: 500;
+  color: #2a3b56;
+}
+
+/* Vertical toolbar layout */
+.floatingbar.vertical .float-zoomgroup {
+  flex-direction: column;
+}
+
+.floatingbar.vertical .float-separator {
+  width: 25px;
+  height: 1px;
+  margin: 4px 0;
+}
+
+/* Selection information in Tree Tools */
+.selection-note {
+  margin-top: 18px;
+  padding-top: 12px;
+  border-top: 1px solid #e8edf4;
+  color: #6d7e98;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
