@@ -48,9 +48,12 @@
 
    </div>
    <div class="footer">
-     <div id="selectionText" class="footer-selection">Click a node to select it</div>
-     <button class="floating-toggle" id="floatingToggle">Floating tools: On</button>
-   </div>
+  <div class="footer-left">
+    <div id="selectionText" class="footer-selection">Click a node to select it</div>
+  </div>
+  <div class="footer-divider" aria-hidden="true"></div>
+  <div class="footer-info" id="bottomInfo" role="status" aria-live="polite"></div>
+</div>
   </section>
 
   <aside id="rightSide" class="sidebar right">
@@ -59,7 +62,8 @@
     </div>
     <div class="sidebar-body">
       <div class="side-heading">TREE TOOLS</div>
-      <div class="tools" id="sidebarTools"></div>
+     <div class="tools" id="sidebarTools"></div>
+     <button class="floating-toggle sidebar-floating-toggle" id="floatingToggle" type="button">Floating tools: On</button>
     </div>
   </aside>
 
