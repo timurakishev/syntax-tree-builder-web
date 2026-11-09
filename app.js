@@ -25,6 +25,7 @@ const toolButtons={};
 let mode='free';
 let root=makeNode('?'), freeTree=clone(root), freeWords=[];
 let selectedUid=null, undoStack=[], redoStack=[];
+let lastTouchNode=null, lastTouchTime=0, lastTouchOpenTime=0;
 let bankName='No worksheet imported', sentences=[], exerciseIds=[], originalCount=0;
 let currentIndex=0, workingTrees={}, workHandle=null, workFilename=null;
 let zoom=1, leftCollapsed=false,rightCollapsed=false, floatingVisible=true;
@@ -660,9 +661,40 @@ function createTreeSvg(layout,comments){
     group.append(frame);
     if(n.label!=='EMPTY')group.append(svgEl('text',{x:w/2,y:24,'text-anchor':'middle','dominant-baseline':'middle',
       'font-family':'Georgia,serif','font-size':20,'font-weight':'bold',fill:INK},n.label));
-    group.addEventListener('click',event=>{event.stopPropagation();selectNode(n.uid);});
+
+    group.style.touchAction='manipulation';
+
+    group.addEventListener('click',event=>{
+      event.stopPropagation();
+      selectNode(n.uid);
+    });
+
+    group.addEventListener('pointerup',event=>{
+      if(event.pointerType!=='touch'&&event.pointerType!=='pen')return;
+
+      const now=performance.now();
+
+      if(lastTouchNode===n.uid&&selectedUid===n.uid&&now-lastTouchTime<500){
+        lastTouchNode=null;
+        lastTouchTime=0;
+        lastTouchOpenTime=now;
+        event.preventDefault();
+        event.stopPropagation();
+        selectNode(n.uid);
+        changeLabel(event);
+      }else{
+        lastTouchNode=n.uid;
+        lastTouchTime=now;
+      }
+    });
+
     group.addEventListener('dblclick',event=>{
-      event.stopPropagation();selectedUid=n.uid;updateSelection();updateControls();changeLabel(event);
+      if(performance.now()-lastTouchOpenTime<700)return;
+      event.stopPropagation();
+      selectedUid=n.uid;
+      updateSelection();
+      updateControls();
+      changeLabel(event);
     });
     group.addEventListener('keydown',event=>{
       if(event.key==='Enter'){event.preventDefault();event.stopPropagation();selectNode(n.uid);changeLabel(group);}
