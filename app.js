@@ -862,19 +862,40 @@ function initFloatingToolbar(){
   });
   grip.addEventListener('pointermove',event=>{
     if(!drag)return;
+
     const bounds=area.getBoundingClientRect();
-    let x=Math.max(6,Math.min(bounds.width-bar.offsetWidth-6,drag.x+event.clientX-drag.startX));
-    let y=Math.max(6,Math.min(bounds.height-bar.offsetHeight-6,drag.y+event.clientY-drag.startY));
-    bar.classList.remove('docked-right','vertical');
-    if(x<60||x>bounds.width-bar.offsetWidth-36){
-      bar.classList.add('vertical');
-      if(x>bounds.width-320){bar.classList.add('docked-right');x=bounds.width-bar.offsetWidth-12;}
-      else x=12;
-      y=Math.max(6,Math.min(bounds.height-bar.offsetHeight-6,y));
+    const pointerX=event.clientX-bounds.left;
+
+    const dockRight=pointerX>=bounds.width-55;
+    const dockLeft=!dockRight&&pointerX<=55;
+
+    bar.classList.toggle('vertical',dockLeft||dockRight);
+    bar.classList.toggle('docked-right',dockRight);
+
+    let x=drag.x+event.clientX-drag.startX;
+    let y=drag.y+event.clientY-drag.startY;
+
+    if(dockLeft){
+      x=12;
+    }else if(dockRight){
+      x=bounds.width-bar.offsetWidth-12;
+    }else{
+      x=Math.max(6,Math.min(bounds.width-bar.offsetWidth-6,x));
     }
-    bar.style.left=x+'px';bar.style.top=y+'px';bar.style.right='auto';
-    floatingPosition={x,y,vertical:bar.classList.contains('vertical'),right:bar.classList.contains('docked-right')};
+
+    y=Math.max(6,Math.min(bounds.height-bar.offsetHeight-6,y));
+
+    bar.style.left=x+'px';
+    bar.style.top=y+'px';
+    bar.style.right='auto';
+
+    floatingPosition={
+      x,y,
+      vertical:dockLeft||dockRight,
+      right:dockRight
+    };
   });
+
   grip.addEventListener('pointerup',()=>{drag=null;});
   grip.addEventListener('pointercancel',()=>{drag=null;});
   new ResizeObserver(()=>{
