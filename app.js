@@ -563,7 +563,7 @@ function geometryOfTree(layout){
   }
   for(const e of layout.edges)add(Math.min(e.x1,e.x2),Math.min(e.y1,e.y2),Math.max(e.x1,e.x2),Math.max(e.y1,e.y2));
   for(const t of layout.terminals){const w=textWidth(t.text);add(t.x-w/2,t.y+4,t.x+w/2,t.y+33);}
-  for(const t of layout.triangles){const w=Math.max(65,t.span/2-4);add(t.x-w,t.y+54,t.x+w,t.y+132);}
+  for(const t of layout.triangles){const w=Math.max(65,t.span/2-4);add(t.x-w,t.y+48,t.x+w,t.y+126);}
   if(!isFinite(left))return {left:0,top:0,right:0,bottom:0};
   return {left,top,right,bottom};
 }
@@ -670,7 +670,7 @@ function createTreeSvg(layout,comments){
     content.append(group);
   }
   for(const t of layout.triangles){
-    const half=Math.max(65,t.span/2-4),apex=t.y+54,base=t.y+103;
+    const half=Math.max(65,t.span/2-4),apex=t.y+48,base=t.y+97;
     content.append(svgEl('path',{d:`M${t.x} ${apex} L${t.x-half} ${base} L${t.x+half} ${base} Z`,
       fill:'none',stroke:EDGE,'stroke-width':2,'stroke-linejoin':'round'}));
     content.append(svgEl('text',{x:t.x,y:base+25,'text-anchor':'middle',
