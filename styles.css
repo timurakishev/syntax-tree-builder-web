@@ -178,5 +178,15 @@
   margin-top: 18px;
   text-align: center;
 }
+#duplicateBtn,
+#deleteDuplicateBtn {
+  font-size: 14px;
+  padding: 8px 14px;
+  min-height: 36px;
+}
 
+#deleteDuplicateBtn {
+  color: #a34545;
+  border-color: #e5caca;
+}
 
