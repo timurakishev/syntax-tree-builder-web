@@ -32,16 +32,35 @@
    </div>
   </aside>
   <section class="workspace">
-   <div class="strip"><div id="selectionText" class="context">Click a node to select it</div><div class="flex-spacer"></div><span class="tip">Double-click node: Edit label</span><div class="zoomgroup"><button class="icon-only" id="zoomOut" title="Zoom out">−</button><button class="icon-only" id="zoomIn" title="Zoom in">+</button></div></div>
    <div class="sentencebar" id="sentenceBar" hidden><strong id="exerciseNumber">Exercise</strong><span id="sentenceText"></span><button id="duplicateBtn">Duplicate</button></div>
    <div class="drawing-area" id="drawingArea">
      <div class="scroll-canvas" id="scrollCanvas"><div class="tree-stage" id="treeStage"><svg class="tree" id="treeSvg" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Editable syntax tree"></svg></div></div>
      <div class="placeholder" id="placeholder" hidden>Practice/Exam Mode<br><br>Import an instructor worksheet (.xlsx) using the button on the left.<br>Each sentence or phrase will open as a separate exercise.</div>
-     <div class="floatingbar" id="floatingBar" aria-label="Floating Tree Tools"><div class="float-grip" id="floatGrip" title="Drag to move floating toolbar">⠿</div><div id="floatingButtons" style="display:contents"></div></div>
+     <div class="floatingbar" id="floatingBar" aria-label="Floating Tree Tools">
+       <div class="float-grip" id="floatGrip" title="Drag to move floating toolbar">⠿</div>
+       <div id="floatingButtons" style="display:contents"></div>
+       <div class="float-zoomgroup">
+         <span class="float-separator" aria-hidden="true"></span>
+         <button class="float-btn float-zoom" id="zoomOut" title="Zoom out" aria-label="Zoom out">−</button>
+         <button class="float-btn float-zoom" id="zoomIn" title="Zoom in" aria-label="Zoom in">+</button>
+       </div>
+     </div>
+
    </div>
    <div class="footer"><div class="footer-info" id="bottomInfo"></div><button class="floating-toggle" id="floatingToggle">Floating tools: On</button></div>
   </section>
-  <aside id="rightSide" class="sidebar right"><div class="side-top"><button id="rightToggle" class="tiny" title="Collapse Tree Tools sidebar">▶</button></div><div class="sidebar-body"><div class="side-heading">TREE TOOLS</div><div class="tools" id="sidebarTools"></div></div></aside>
+
+  <aside id="rightSide" class="sidebar right">
+    <div class="side-top">
+      <button id="rightToggle" class="tiny" title="Collapse Tree Tools sidebar">▶</button>
+    </div>
+    <div class="sidebar-body">
+      <div class="side-heading">TREE TOOLS</div>
+      <div class="tools" id="sidebarTools"></div>
+      <div id="selectionText" class="selection-note">Click a node to select it</div>
+    </div>
+  </aside>
+
  </div>
 </div>
 <div class="overlay" id="overlay" aria-hidden="true"><div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialogTitle"><div class="dialog-header"><span id="dialogTitle">Edit</span><button id="closeDialog" aria-label="Close dialog">×</button></div><div class="dialog-body" id="dialogBody"></div><div class="dialog-footer" id="dialogFooter"></div></div></div>
