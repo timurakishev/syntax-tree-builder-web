@@ -858,6 +858,7 @@ function initCanvasPan(){
   new ResizeObserver(()=>{if(ready())drawTree();}).observe(canvas);
   canvas.addEventListener('pointerdown',event=>{
     if(event.button!==0||event.target.closest?.('.tree-node,.comment-bubble'))return;
+    selectNode(null);
     drag={x:event.clientX,y:event.clientY,scrollX:canvas.scrollLeft,scrollY:canvas.scrollTop};
     canvas.classList.add('panning');canvas.setPointerCapture(event.pointerId);
   });
