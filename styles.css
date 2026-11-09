@@ -99,3 +99,22 @@
   line-height: 1.5;
   overflow-wrap: anywhere;
 }
+
+/* Compact zoom buttons */
+.float-zoomgroup {
+  gap: 0;
+}
+
+.float-zoom {
+  width: 30px;
+  height: 34px;
+}
+
+.float-separator {
+  margin: 0 2px;
+}
+
+.floatingbar.vertical .float-separator {
+  margin: 2px 0;
+}
+
