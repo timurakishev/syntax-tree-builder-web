@@ -397,7 +397,7 @@ async function attachWord(anchor){
   }];
 
   words().forEach((token,index)=>{
-    if(!occupied.has(index)||index===node.word_index){
+    if(!occupied.has(index)){
       items.push({
         label:`${index+1}.  ${token}`,
         action:()=>{
