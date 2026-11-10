@@ -1350,41 +1350,90 @@ function initFloatingToolbar(){
   grip.addEventListener('pointerdown',event=>{
     if(event.button!==0)return;
     event.preventDefault();closeMenu();
-    const rect=bar.getBoundingClientRect(),parent=area.getBoundingClientRect();
+
+    const rect=bar.getBoundingClientRect();
+    const bounds=area.getBoundingClientRect();
+    const wasVertical=bar.classList.contains('vertical');
+    const wasRight=bar.classList.contains('docked-right');
+
+    if(wasVertical)bar.classList.remove('vertical');
+    const horizontalWidth=bar.offsetWidth;
+    if(wasVertical)bar.classList.add('vertical');
+
     drag={
-      startY:event.clientY,
-      y:rect.top-parent.top,
-      grabX:event.clientX-rect.left
-      };
-    bar.style.transform='none';bar.style.right='auto';bar.style.bottom='auto';
-    bar.style.left=drag.x+'px';bar.style.top=drag.y+'px';
+      lastClientX:event.clientX,
+      lastClientY:event.clientY,
+      virtualX:wasVertical
+        ?(wasRight?bounds.width-horizontalWidth-55:55)
+        :rect.left-bounds.left,
+      y:rect.top-bounds.top,
+      horizontalWidth
+    };
+
+    bar.style.transform='none';
+    bar.style.right='auto';
+    bar.style.bottom='auto';
+    bar.style.left=(rect.left-bounds.left)+'px';
+    bar.style.top=drag.y+'px';
+
     grip.setPointerCapture(event.pointerId);
   });
   grip.addEventListener('pointermove',event=>{
     if(!drag)return;
 
     const bounds=area.getBoundingClientRect();
-    const pointerX=event.clientX-bounds.left;
 
-    let y=drag.y+event.clientY-drag.startY;
+    drag.virtualX+=event.clientX-drag.lastClientX;
+    drag.y+=event.clientY-drag.lastClientY;
+    drag.lastClientX=event.clientX;
+    drag.lastClientY=event.clientY;
 
-    const dockLeft=pointerX<=55;
-    const dockRight=pointerX>=bounds.width-55;
+    const wasLeft=bar.classList.contains('vertical') &&
+      !bar.classList.contains('docked-right');
+    const wasRight=bar.classList.contains('vertical') &&
+      bar.classList.contains('docked-right');
+
+    const DOCK_DISTANCE=55;
+    const RELEASE_DISTANCE=55;
+
+    const leftEdge=drag.virtualX;
+    const rightEdge=drag.virtualX+drag.horizontalWidth;
+
+    let dockLeft=wasLeft
+      ?leftEdge<=DOCK_DISTANCE+RELEASE_DISTANCE
+      :leftEdge<=DOCK_DISTANCE;
+
+    let dockRight=wasRight
+      ?rightEdge>=bounds.width-DOCK_DISTANCE-RELEASE_DISTANCE
+      :rightEdge>=bounds.width-DOCK_DISTANCE;
+
+    if(dockLeft&&dockRight){
+      if(wasLeft)dockRight=false;
+      else if(wasRight)dockLeft=false;
+      else if((leftEdge+rightEdge)/2<bounds.width/2)dockRight=false;
+      else dockLeft=false;
+    }
 
     bar.classList.toggle('vertical',dockLeft||dockRight);
     bar.classList.toggle('docked-right',dockRight);
 
-    let x=pointerX-drag.grabX;
+    let x;
 
     if(dockLeft){
       x=12;
     }else if(dockRight){
       x=bounds.width-bar.offsetWidth-12;
     }else{
-      x=Math.max(6,Math.min(bounds.width-bar.offsetWidth-6,x));
+      x=Math.max(6,Math.min(
+        bounds.width-bar.offsetWidth-6,
+        drag.virtualX
+      ));
     }
 
-    y=Math.max(6,Math.min(bounds.height-bar.offsetHeight-6,y));
+    const y=Math.max(6,Math.min(
+      bounds.height-bar.offsetHeight-6,
+      drag.y
+    ));
 
     bar.style.left=x+'px';
     bar.style.top=y+'px';
