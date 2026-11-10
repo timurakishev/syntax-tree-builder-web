@@ -972,7 +972,6 @@ function layoutTree(){
       });
       maxDepth=Math.max(maxDepth,depth+1);
     }else if(node.word_index!==null&&node.word_index>=0&&node.word_index<text.length){
-      terminals.push({text:text[node.word_index],parts:lexicalSubscripts(node),x:mid,y:y+39});
       terminals.push({
         text:text[node.word_index],
         parts:lexicalSubscripts(node),
