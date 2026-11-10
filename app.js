@@ -484,7 +484,7 @@ function switchExercise(index){
 async function saveAndGo(){
   if(mode!=='practice'||!sentences.length)return;
   const value=$('jumpInput').value.trim().toLowerCase(),index=exerciseIds.indexOf(value);
-  if(index<0){await alertDialog('Invalid exercise number','Enter an existing exercise number, for example 3, 3b, or 3c.');return;}
+  if(index<0){await alertDialog('Invalid exercise number','Enter an existing exercise number.');return;}
   if(index===currentIndex){$('jumpInput').value=exerciseIds[currentIndex];return;}
   const previous=currentIndex;switchExercise(index);
   if(workFilename&&!await saveProgress(false)){switchExercise(previous);return;}
