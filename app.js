@@ -13,7 +13,7 @@ const iconPaths={
   branches:'<circle cx="6" cy="5" r="2"/><circle cx="18" cy="5" r="2"/><circle cx="12" cy="19" r="2"/><path d="M6 7v3a6 6 0 0 0 6 6v1M18 7v3a6 6 0 0 1-6 6"/>',
   label:'<path d="M4 20l4.5-1L20 7a2.12 2.12 0 0 0-3-3L5 16zM15 6l3 3"/>',
   word:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M8 9h8M12 9v7M9 16h6"/>',
-  features:'<path d="M8 4H5v16h3M16 4h3v16h-3"/><path d="M10 9h4M10 15h4"/>',
+  features:'<path d="M8 4H5v16h3M16 4h3v16h-3"/><circle cx="9.5" cy="12" r=".9" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r=".9" fill="currentColor" stroke="none"/><circle cx="14.5" cy="12" r=".9" fill="currentColor" stroke="none"/>',
   comment:'<path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5 9 9 0 0 1-4-.9L3 21l1.9-5.5A8.5 8.5 0 1 1 21 11.5z"/>',
   delete:'<path d="M3 6h18M8 6V4h8v2M5 6l1 15h12l1-15M10 10v7M14 10v7"/>',
   reset:'<path d="M3 11a9 9 0 1 1 2.5 6.2M3 4v7h7"/>'
@@ -205,7 +205,12 @@ function enabled(name){
   const editable=ready(),node=currentNode();
   if(name==='comment'||name==='reset')return editable;
   if(!editable||!node)return false;
-  if(name==='label'||name==='features')return true;
+  if(name==='label')return true;
+  if(name==='features'){
+    return node.label!=='EMPTY' &&
+      (isHead(node.label)||isPhrase(node.label));
+  }
+  
   if(name==='delete')return node.uid!==root.uid;
   if(name==='branches')return node.word_index===null&&!node.null_element&&node.triangle_text===null&&
     node.children.length<(isPhrase(node.label)?3:2)&&node.label!=='?'&&node.label!=='EMPTY'&&
@@ -289,8 +294,9 @@ function changeLabel(anchor){
 
 function editFeatures(){
   const node=currentNode();
-  if(!node||!ready())return;
-
+  if(!node||!ready()||node.label==='EMPTY'||
+     (!isHead(node.label)&&!isPhrase(node.label)))return;
+  
   showDialog(`Attach/Edit features — ${heading(node.label)}`,(body,footer)=>{
     const fields={};
 
