@@ -16,7 +16,9 @@ const iconPaths={
   features:'<path d="M8 4H5v16h3M16 4h3v16h-3"/><circle cx="9.5" cy="12" r=".9" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r=".9" fill="currentColor" stroke="none"/><circle cx="14.5" cy="12" r=".9" fill="currentColor" stroke="none"/>',
   comment:'<path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5 9 9 0 0 1-4-.9L3 21l1.9-5.5A8.5 8.5 0 1 1 21 11.5z"/>',
   delete:'<path d="M3 6h18M8 6V4h8v2M5 6l1 15h12l1-15M10 10v7M14 10v7"/>',
-  reset:'<path d="M3 11a9 9 0 1 1 2.5 6.2M3 4v7h7"/>'
+  reset:'<path d="M3 11a9 9 0 1 1 2.5 6.2M3 4v7h7"/>',
+  undo:'<path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-2"/>',
+  redo:'<path d="m15 14 5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h2"/>'
 };
 const TOOL_CONFIG=[
   ['branches','Add branches'],['label','Change label'],['word','Attach/Edit word'],
@@ -186,18 +188,60 @@ function showAbout(){
   alertDialog('About Syntax Tree Builder',
     'Syntax Tree Builder\n\nDeveloped by Timur Akishev (KIMEP University), 2026\nFree for educational, non-commercial use.\n\nThis is an initial test build, not a final release.\n\nContact: t.akishev@kimep.kz');
 }
-function icon(name,color='#2A3B56'){
+
+function icon(name,color='currentColor'){
   return `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="${color}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${iconPaths[name]}</svg>`;
 }
+
+function addFloatingButton(button){
+  const group=$('floatingButtons');
+
+  if(group.children.length){
+    const divider=document.createElement('span');
+    divider.className='float-separator';
+    divider.setAttribute('aria-hidden','true');
+    group.append(divider);
+  }
+
+  group.append(button);
+}
+
 function initTools(){
   for(const [name,title] of TOOL_CONFIG){
-    const b=document.createElement('button');b.type='button';b.className='tool'+(name==='branches'?' primary-soft':'');
-    b.innerHTML=`<span class="tool-icon">${icon(name,name==='branches'?'#1554BF':'#2A3B56')}</span><span>${title}</span>`;
-    b.id='tool-'+name;b.onclick=()=>runTool(name,b);$('sidebarTools').append(b);
-    const floating=document.createElement('button');floating.type='button';floating.className='float-btn';
-    floating.title=title;floating.setAttribute('aria-label',title);floating.innerHTML=icon(name,name==='branches'?'#1554BF':'#2A3B56');
-    floating.onclick=()=>runTool(name,floating);$('floatingButtons').append(floating);
+    const b=document.createElement('button');
+    b.type='button';
+    b.className='tool'+(name==='branches'?' primary-soft':'');
+    b.innerHTML=`<span class="tool-icon">${icon(name)}</span><span>${title}</span>`;
+    b.id='tool-'+name;
+    b.onclick=()=>runTool(name,b);
+    $('sidebarTools').append(b);
+
+    const floating=document.createElement('button');
+    floating.type='button';
+    floating.className='float-btn';
+    floating.title=title;
+    floating.setAttribute('aria-label',title);
+    floating.innerHTML=icon(name);
+    floating.onclick=()=>runTool(name,floating);
+
+    addFloatingButton(floating);
     toolButtons[name]={b,floating};
+  }
+
+  for(const [name,title,action] of [
+    ['undo','Undo',undo],
+    ['redo','Redo',redo]
+  ]){
+    const button=document.createElement('button');
+    button.type='button';
+    button.id=name==='undo'?'floatingUndo':'floatingRedo';
+    button.className='float-btn';
+    button.title=title;
+    button.setAttribute('aria-label',title);
+    button.innerHTML=icon(name);
+    button.onclick=action;
+
+    addFloatingButton(button);
   }
 }
 
@@ -226,6 +270,8 @@ function updateControls(){
   }
   $('undoBtn').disabled=!ready()||!undoStack.length;
   $('redoBtn').disabled=!ready()||!redoStack.length;
+  $('floatingUndo').disabled=!ready()||!undoStack.length;
+  $('floatingRedo').disabled=!ready()||!redoStack.length;
   $('openBtn').disabled=mode!=='practice';
   $('saveBtn').disabled=mode!=='practice'||!sentences.length;
   $('pngBtn').disabled=!ready();
