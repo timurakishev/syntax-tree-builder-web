@@ -426,22 +426,6 @@ function editFeatures(){
       true
     );
 
-    // Movement trace
-
-    const traceRow=document.createElement('label');
-    traceRow.style.cssText='display:flex;align-items:center;gap:10px;margin:14px 0;cursor:pointer';
-
-    const trace=document.createElement('input');
-    trace.type='checkbox';
-    trace.style.cssText='width:18px;height:18px;padding:0;margin:0;flex:none;accent-color:#2469dd';
-    trace.checked=node.trace===true;
-
-    const traceText=document.createElement('span');
-    traceText.textContent='Movement trace (t)';
-
-    traceRow.append(trace,traceText);
-    body.append(traceRow);
-
     // Save all feature changes
 
     const finish=()=>{
@@ -450,8 +434,6 @@ function editFeatures(){
       for(const [key,input] of Object.entries(fields)){
         changes[key]=input.value.trim();
       }
-
-      changes.trace=trace.checked;
 
       if(Object.entries(changes).some(([key,value])=>node[key]!==value)){
         checkpoint();
@@ -820,7 +802,6 @@ function labelSubscripts(node){
     text:index.startsWith('*')?`(${index})`:index,
     italic:true
   });
-  if(node.trace)parts.push({text:'t',italic:true});
 
   return parts;
 }
