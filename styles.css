@@ -195,3 +195,19 @@
   padding: 12px 6px;
   min-height: 45px;
 }
+/* Feature editor preset buttons */
+
+.dialog-body .feature-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.dialog-body .feature-presets button {
+  width: auto;
+  min-width: 0;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  padding: 8px 10px;
+}
