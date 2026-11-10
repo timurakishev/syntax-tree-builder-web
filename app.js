@@ -218,7 +218,7 @@ function initTools(){
 
     const floating=document.createElement('button');
     floating.type='button';
-    floating.className='float-btn';
+    floating.className='float-btn'+(name==='branches'?' float-branches':'');
     floating.title=title;
     floating.setAttribute('aria-label',title);
     floating.innerHTML=icon(name);
