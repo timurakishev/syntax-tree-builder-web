@@ -1351,8 +1351,11 @@ function initFloatingToolbar(){
     if(event.button!==0)return;
     event.preventDefault();closeMenu();
     const rect=bar.getBoundingClientRect(),parent=area.getBoundingClientRect();
-    drag={startX:event.clientX,startY:event.clientY,x:rect.left-parent.left,y:rect.top-parent.top,
-      w:rect.width,h:rect.height};
+    drag={
+      startY:event.clientY,
+      y:rect.top-parent.top,
+      grabX:event.clientX-rect.left
+      };
     bar.style.transform='none';bar.style.right='auto';bar.style.bottom='auto';
     bar.style.left=drag.x+'px';bar.style.top=drag.y+'px';
     grip.setPointerCapture(event.pointerId);
@@ -1361,18 +1364,17 @@ function initFloatingToolbar(){
     if(!drag)return;
 
     const bounds=area.getBoundingClientRect();
+    const pointerX=event.clientX-bounds.left;
 
-    let x=drag.x+event.clientX-drag.startX;
     let y=drag.y+event.clientY-drag.startY;
 
-    bar.classList.remove('vertical','docked-right');
-    const fullWidth=bar.offsetWidth;
-
-    const dockLeft=x<=55;
-    const dockRight=!dockLeft&&x+fullWidth>=bounds.width-55;
+    const dockLeft=pointerX<=55;
+    const dockRight=pointerX>=bounds.width-55;
 
     bar.classList.toggle('vertical',dockLeft||dockRight);
     bar.classList.toggle('docked-right',dockRight);
+
+    let x=pointerX-drag.grabX;
 
     if(dockLeft){
       x=12;
@@ -1400,9 +1402,36 @@ function initFloatingToolbar(){
   new ResizeObserver(()=>{
     if(!floatingPosition)return;
     const w=area.clientWidth,h=area.clientHeight;
-    const x=Math.min(Math.max(8,floatingPosition.x),Math.max(8,w-bar.offsetWidth-8));
-    const y=Math.min(Math.max(8,floatingPosition.y),Math.max(8,h-bar.offsetHeight-8));
-    bar.style.left=x+'px';bar.style.top=y+'px';
+    const x=floatingPosition.right
+      ?Math.max(8,w-bar.offsetWidth-12)
+      :Math.min(Math.max(8,floatingPosition.x),Math.max(8,w-bar.offsetWidth-8));
+
+    const y=Math.min(
+      Math.max(8,floatingPosition.y),
+      Math.max(8,h-bar.offsetHeight-8)
+    );
+
+    bar.style.left=x+'px';
+    bar.style.top=y+'px';
+
+    floatingPosition.x=x;
+    floatingPosition.y=y;
+
+    const x=floatingPosition.right
+      ?Math.max(8,w-bar.offsetWidth-12)
+      :Math.min(Math.max(8,floatingPosition.x),Math.max(8,w-bar.offsetWidth-8));
+
+    const y=Math.min(
+      Math.max(8,floatingPosition.y),
+      Math.max(8,h-bar.offsetHeight-8)
+    );
+
+    bar.style.left=x+'px';
+    bar.style.top=y+'px';
+
+    floatingPosition.x=x;
+    floatingPosition.y=y;
+    
   }).observe(area);
 }
 function initCanvasPan(){
