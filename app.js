@@ -13,13 +13,15 @@ const iconPaths={
   branches:'<circle cx="6" cy="5" r="2"/><circle cx="18" cy="5" r="2"/><circle cx="12" cy="19" r="2"/><path d="M6 7v3a6 6 0 0 0 6 6v1M18 7v3a6 6 0 0 1-6 6"/>',
   label:'<path d="M4 20l4.5-1L20 7a2.12 2.12 0 0 0-3-3L5 16zM15 6l3 3"/>',
   word:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M8 9h8M12 9v7M9 16h6"/>',
+  features:'<path d="M8 4H5v16h3M16 4h3v16h-3"/><path d="M10 9h4M10 15h4"/>',
   comment:'<path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5 9 9 0 0 1-4-.9L3 21l1.9-5.5A8.5 8.5 0 1 1 21 11.5z"/>',
   delete:'<path d="M3 6h18M8 6V4h8v2M5 6l1 15h12l1-15M10 10v7M14 10v7"/>',
   reset:'<path d="M3 11a9 9 0 1 1 2.5 6.2M3 4v7h7"/>'
 };
 const TOOL_CONFIG=[
   ['branches','Add branches'],['label','Change label'],['word','Attach/Edit word'],
-  ['comment','Add comment'],['delete','Delete subtree'],['reset','Reset tree']
+  ['features','Attach/Edit features'],['comment','Add comment'],
+  ['delete','Delete subtree'],['reset','Reset tree']
 ];
 const toolButtons={};
 let mode='free';
@@ -203,7 +205,7 @@ function enabled(name){
   const editable=ready(),node=currentNode();
   if(name==='comment'||name==='reset')return editable;
   if(!editable||!node)return false;
-  if(name==='label')return true;
+  if(name==='label'||name==='features')return true;
   if(name==='delete')return node.uid!==root.uid;
   if(name==='branches')return node.word_index===null&&!node.null_element&&node.triangle_text===null&&
     node.children.length<(isPhrase(node.label)?3:2)&&node.label!=='?'&&node.label!=='EMPTY'&&
@@ -280,6 +282,189 @@ function changeLabel(anchor){
     }}))});
   }
   showMenu(anchor??$('tool-label'),items);
+}
+
+// Step 2: Feature editor
+// Feature rendering will be implemented in Step 3.
+
+function editFeatures(){
+  const node=currentNode();
+  if(!node||!ready())return;
+
+  showDialog(`Attach/Edit features — ${heading(node.label)}`,(body,footer)=>{
+    const fields={};
+
+    const addField=(key,title,help,presets,replacePreset=false)=>{
+      const group=document.createElement('div');
+      group.className='dialog-group';
+
+      const caption=document.createElement('b');
+      caption.textContent=title;
+      group.append(caption);
+
+      const field=document.createElement('input');
+      field.type='text';
+      field.autocomplete='off';
+      field.spellcheck=false;
+      field.value=node[key]??'';
+      field.setAttribute('aria-label',title);
+      group.append(field);
+      fields[key]=field;
+
+      const hint=document.createElement('div');
+      hint.className='dialog-note';
+      hint.textContent=help;
+      group.append(hint);
+
+      if(presets.length){
+        const grid=document.createElement('div');
+        grid.className='label-grid';
+        grid.style.marginTop='9px';
+
+        for(const example of presets){
+          const button=document.createElement('button');
+          button.type='button';
+          button.textContent=example;
+          button.title=`Insert ${example}`;
+
+          button.addEventListener('click',()=>{
+            const value=field.value.trim();
+
+            // Combine bracketed features:
+            // [+Q] and [+WH] become [+Q, +WH].
+
+            if(replacePreset){
+              field.value=example;
+            }
+            else if(/^\[[^\]]+\]$/.test(value)&&/^\[[^\]]+\]$/.test(example)){
+              const pieces=value.slice(1,-1)
+                .split(',')
+                .map(p=>p.trim())
+                .filter(Boolean);
+
+              for(const part of example.slice(1,-1).split(',').map(p=>p.trim())){
+                if(part&&!pieces.includes(part)){
+                  pieces.push(part);
+                }
+              }
+
+              field.value=`[${pieces.join(', ')}]`;
+            }
+            else if(!value){
+              field.value=example;
+            }
+            else if(!value.split(/\s*,\s*|\s+/).includes(example)){
+              field.value=`${value} ${example}`;
+            }
+
+            field.focus();
+            field.setSelectionRange(field.value.length,field.value.length);
+          });
+
+          grid.append(button);
+        }
+
+        group.append(grid);
+      }
+
+      body.append(group);
+      return field;
+    };
+
+    // Features attached to heads and phrase labels
+
+    addField(
+      'label_features',
+      'Head / phrase label features',
+      'Shown as a subscript to the category label (C, T, DP, etc.).',
+      [
+        '[+Q]','[-Q]','[+WH]','[NOM]',
+        '[ACC]','[+ACC]','[-ACC]',
+        '[+Q, +WH]','[+WH, +ACC]'
+      ]
+    );
+
+    // Features attached to lexical or null elements
+
+    if(isHead(node.label)){
+      addField(
+        'lexical_features',
+        'Lexical / null-element features',
+        'For the word or Ø attached to this head. Custom entries are allowed.',
+        [
+          'pres','past','perf','prog',
+          'pass','neg','emph','active',
+          '[+ACC]','[-ACC]'
+        ]
+      );
+
+      // Expanded FORM annotation
+
+      addField(
+        'form_feature',
+        '[FORM] feature',
+        'Expanded notation displayed beneath the word, not beside the category label.',
+        [
+          '[+V, FORM preterite]',
+          '[+V, FORM bare]',
+          '[+V, FORM participle]',
+          '[+V, FORM gerund]'
+        ],
+        true
+      );
+    }
+
+    // Coindexation
+
+    addField(
+      'coindexation',
+      'Coindexation',
+      'Enter an index or ungrammatical coindexation marker.',
+      ['i','j','k','*i','*j','*k'],
+      true
+    );
+
+    // Movement trace
+
+    const traceRow=document.createElement('label');
+    traceRow.style.cssText='display:flex;align-items:center;gap:10px;margin:14px 0;cursor:pointer';
+
+    const trace=document.createElement('input');
+    trace.type='checkbox';
+    trace.style.cssText='width:18px;height:18px;padding:0;margin:0;flex:none;accent-color:#2469dd';
+    trace.checked=node.trace===true;
+
+    const traceText=document.createElement('span');
+    traceText.textContent='Movement trace (t)';
+
+    traceRow.append(trace,traceText);
+    body.append(traceRow);
+
+    // Save all feature changes
+
+    const finish=()=>{
+      const changes={};
+
+      for(const [key,input] of Object.entries(fields)){
+        changes[key]=input.value.trim();
+      }
+
+      changes.trace=trace.checked;
+
+      if(Object.entries(changes).some(([key,value])=>node[key]!==value)){
+        checkpoint();
+        Object.assign(node,changes);
+        afterEdit();
+      }
+
+      closeDialog();
+    };
+
+    addDialogButton(footer,'Cancel',closeDialog);
+    addDialogButton(footer,'Save features',finish,true);
+
+    requestAnimationFrame(()=>fields.label_features.focus());
+  });
 }
 async function editTriangle(){
   const node=currentNode();
@@ -456,7 +641,7 @@ async function resetTree(){
 function runTool(name,anchor){
   if(!enabled(name))return;
   ({branches:()=>addBranches(anchor),label:()=>changeLabel(anchor),word:()=>attachWord(anchor),
-    comment:addComment,delete:deleteNode,reset:resetTree})[name]?.();
+    features:editFeatures,comment:addComment,delete:deleteNode,reset:resetTree})[name]?.();
 }
 function switchMode(next){
   if(next===mode||!['free','practice'].includes(next))return;
