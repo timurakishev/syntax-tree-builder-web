@@ -16,7 +16,7 @@ const iconPaths={
   features:'<path d="M8 4H5v16h3M16 4h3v16h-3"/><circle cx="9.5" cy="12" r=".9" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r=".9" fill="currentColor" stroke="none"/><circle cx="14.5" cy="12" r=".9" fill="currentColor" stroke="none"/>',
   comment:'<path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5 9 9 0 0 1-4-.9L3 21l1.9-5.5A8.5 8.5 0 1 1 21 11.5z"/>',
   delete:'<path d="M3 6h18M8 6V4h8v2M5 6l1 15h12l1-15M10 10v7M14 10v7"/>',
-  reset:'<path d="M3 11a9 9 0 1 1 2.5 6.2M3 4v7h7"/>',
+  reset:'<path d="m7 21-4-4a2 2 0 0 1 0-3l10-10a2 2 0 0 1 3 0l5 5a2 2 0 0 1 0 3L11 21"/><path d="M22 21H7"/><path d="m5 11 9 9"/>',
   undo:'<path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-2"/>',
   redo:'<path d="m15 14 5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h2"/>'
 };
