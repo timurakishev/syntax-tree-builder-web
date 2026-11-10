@@ -268,8 +268,6 @@ function updateControls(){
   for(const [name,obj] of Object.entries(toolButtons)){
     const on=enabled(name);obj.b.disabled=!on;obj.floating.disabled=!on;
   }
-  $('undoBtn').disabled=!ready()||!undoStack.length;
-  $('redoBtn').disabled=!ready()||!redoStack.length;
   $('floatingUndo').disabled=!ready()||!undoStack.length;
   $('floatingRedo').disabled=!ready()||!redoStack.length;
   $('openBtn').disabled=mode!=='practice';
@@ -1494,7 +1492,6 @@ function init(){
   $('aboutBtn').onclick=showAbout;
   $('leftToggle').onclick=()=>{leftCollapsed=!leftCollapsed;render();};
   $('rightToggle').onclick=()=>{rightCollapsed=!rightCollapsed;render();};
-  $('undoBtn').onclick=undo;$('redoBtn').onclick=redo;
   $('zoomIn').onclick=()=>changeZoom(1.15);$('zoomOut').onclick=()=>changeZoom(1/1.15);
   $('prevBtn').onclick=()=>switchExercise(currentIndex-1);
   $('nextBtn').onclick=saveAndNext;
