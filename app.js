@@ -446,7 +446,6 @@ function editFeatures(){
           '[+Q]','[-Q]',
           'pres','past','perf','prog',
           'pass','active','neg','emph',
-          '[+ACC]','[-ACC]'
         ]
       );
 
