@@ -392,6 +392,7 @@ function editFeatures(){
         'Lexical / null-element features',
         'For the word or Ø attached to this head. Custom entries are allowed.',
         [
+          '[+Q]','[-Q]',
           'pres','past','perf','prog',
           'pass','neg','emph','active',
           '[+ACC]','[-ACC]'
