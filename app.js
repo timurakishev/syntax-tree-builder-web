@@ -888,6 +888,10 @@ function appendAnnotatedText(parent,base,parts,x,y,{bold=false,middle=false,colo
     );
   }
 }
+function formAnnotationWidth(node){
+  const form=String(node.form_feature??'').trim();
+  return form?textWidth(form,'15px Georgia')+34:0;
+}
 function layoutTree(){
   const widths=new Map(),labelWidths=new Map(),points=new Map(),terminals=[],triangles=[],edges=[];
   const text=words();let maxDepth=0;
@@ -900,9 +904,17 @@ function layoutTree(){
     }else if(node.triangle_text!==null){
       width=Math.max(lw,textWidth(node.triangle_text,'20px Georgia')+34,125);
     }else if(node.null_element){
-      width=Math.max(lw,widthForLabel('Ø',lexicalSubscripts(node)));
+      width=Math.max(
+        lw,
+        widthForLabel('Ø',lexicalSubscripts(node)),
+        formAnnotationWidth(node)
+      );
     }else if(node.word_index!==null&&node.word_index>=0&&node.word_index<text.length){
-      width=Math.max(lw,widthForLabel(text[node.word_index],lexicalSubscripts(node)));
+      width=Math.max(
+        lw,
+        widthForLabel(text[node.word_index],lexicalSubscripts(node)),
+        formAnnotationWidth(node)
+      );
     }
     widths.set(node.uid,width);return width;
   }
@@ -922,10 +934,23 @@ function layoutTree(){
       triangles.push({phrase:node.triangle_text,x:mid,y,span:widths.get(node.uid)});
       maxDepth=Math.max(maxDepth,depth+1);
     }else if(node.null_element){
-      terminals.push({text:'Ø',parts:lexicalSubscripts(node),x:mid,y:y+39});
+      terminals.push({
+        text:'Ø',
+        parts:lexicalSubscripts(node),
+        form:String(node.form_feature??'').trim(),
+        x:mid,
+        y:y+39
+      });
       maxDepth=Math.max(maxDepth,depth+1);
     }else if(node.word_index!==null&&node.word_index>=0&&node.word_index<text.length){
       terminals.push({text:text[node.word_index],parts:lexicalSubscripts(node),x:mid,y:y+39});
+      terminals.push({
+        text:text[node.word_index],
+        parts:lexicalSubscripts(node),
+        form:String(node.form_feature??'').trim(),
+        x:mid,
+        y:y+39
+      });
       maxDepth=Math.max(maxDepth,depth+1);
     }
   }
@@ -946,8 +971,14 @@ function geometryOfTree(layout){
   for(const t of layout.terminals){
     const mainWidth=textWidth(t.text,'20px Georgia');
     const subWidth=annotatedWidth(t.text,t.parts)-mainWidth;
+
     add(t.x-mainWidth/2,t.y+4,t.x+mainWidth/2+subWidth,t.y+40);
-}
+
+    if(t.form){
+      const fw=textWidth(t.form,'15px Georgia');
+      add(t.x-fw/2,t.y+41,t.x+fw/2,t.y+60);
+    }
+  }
   for(const t of layout.triangles){const w=Math.max(65,t.span/2-4);add(t.x-w,t.y+48,t.x+w,t.y+126);}
   if(!isFinite(left))return {left:0,top:0,right:0,bottom:0};
   return {left,top,right,bottom};
@@ -1134,6 +1165,17 @@ function createTreeSvg(layout,comments){
   }
   for(const t of layout.terminals){
     appendAnnotatedText(content,t.text,t.parts,t.x,t.y+28,{color:'#24334d'});
+    
+    if(t.form){
+      content.append(svgEl('text',{
+        x:t.x,
+        y:t.y+56,
+        'text-anchor':'middle',
+        'font-family':'Georgia,serif',
+        'font-size':15,
+        fill:'#24334d'
+      },t.form));
+    }
   }
   for(const info of comments){
     const {comment,x,y,w,h,lines}=info;
