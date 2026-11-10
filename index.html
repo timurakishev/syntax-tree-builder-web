@@ -41,8 +41,19 @@
        <div id="floatingButtons" style="display:contents"></div>
        <div class="float-zoomgroup">
          <span class="float-separator" aria-hidden="true"></span>
-         <button class="float-btn float-zoom" id="zoomOut" title="Zoom out" aria-label="Zoom out">−</button>
-         <button class="float-btn float-zoom" id="zoomIn" title="Zoom in" aria-label="Zoom in">+</button>
+        <button class="float-btn float-zoom" id="zoomOut" title="Zoom out" aria-label="Zoom out">
+          <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+            <circle cx="10.5" cy="10.5" r="6.5"/>
+            <path d="M15.5 15.5 21 21M7.5 10.5h6"/>
+          </svg>
+        </button>
+        <span class="float-separator" aria-hidden="true"></span>
+        <button class="float-btn float-zoom" id="zoomIn" title="Zoom in" aria-label="Zoom in">
+          <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+            <circle cx="10.5" cy="10.5" r="6.5"/>
+            <path d="M15.5 15.5 21 21M7.5 10.5h6M10.5 7.5v6"/>
+          </svg>
+        </button>
        </div>
      </div>
 
