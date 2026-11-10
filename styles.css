@@ -220,3 +220,56 @@
 .tree-node:focus-visible .selection-frame {
   visibility: visible;
 }
+/* Compact floating toolbar and enabled icon colors */
+
+.tool:not(:disabled) .tool-icon {
+  color: #1554bf;
+}
+
+.tool .tool-icon svg {
+  stroke: currentColor;
+}
+
+.tool:disabled .tool-icon {
+  color: #aab5c5;
+}
+
+.floatingbar {
+  gap: 2px;
+}
+
+.float-btn {
+  width: 34px;
+  height: 36px;
+  color: #1554bf;
+}
+
+.float-btn svg {
+  width: 20px;
+  height: 20px;
+  stroke: currentColor;
+}
+
+.float-btn:disabled {
+  color: #aab5c5;
+}
+
+.float-separator {
+  height: 22px;
+  margin: 0 1px;
+  background: #d9e3f0;
+}
+
+.float-zoomgroup {
+  gap: 2px;
+}
+
+.float-zoom {
+  width: 34px;
+  height: 36px;
+}
+
+.floatingbar.vertical .float-separator {
+  width: 22px;
+  margin: 1px 0;
+}
