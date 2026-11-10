@@ -211,3 +211,12 @@
   overflow-wrap: anywhere;
   padding: 8px 10px;
 }
+/* Prevent duplicate node outlines */
+
+.tree-node:focus {
+  outline: none;
+}
+
+.tree-node:focus-visible .selection-frame {
+  visibility: visible;
+}
