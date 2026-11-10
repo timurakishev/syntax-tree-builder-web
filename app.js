@@ -318,7 +318,7 @@ function editFeatures(){
 
       if(presets.length){
         const grid=document.createElement('div');
-        grid.className='label-grid';
+        grid.className='label-grid feature-presets';
         grid.style.marginTop='9px';
 
         for(const example of presets){
@@ -379,8 +379,7 @@ function editFeatures(){
       'Shown as a subscript to the category label (C, T, DP, etc.).',
       [
         '[+Q]','[-Q]','[+WH]','[NOM]',
-        '[ACC]','[+ACC]','[-ACC]',
-        '[+Q, +WH]','[+WH, +ACC]'
+        '[+ACC]','[-ACC]'
       ]
     );
 
@@ -394,7 +393,7 @@ function editFeatures(){
         [
           '[+Q]','[-Q]',
           'pres','past','perf','prog',
-          'pass','neg','emph','active',
+          'pass','active','neg','emph',
           '[+ACC]','[-ACC]'
         ]
       );
@@ -404,7 +403,7 @@ function editFeatures(){
       addField(
         'form_feature',
         '[FORM] feature',
-        'Expanded notation displayed beneath the word, not beside the category label.',
+        'FORM features appear beneath an attached word or Ø. Attach a lexical item first; otherwise, the feature will not be visible on the tree.',
         [
           '[+V, FORM bare]',
           '[+V, FORM present]',
