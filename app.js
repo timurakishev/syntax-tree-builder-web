@@ -808,22 +808,99 @@ function svgEl(tag,attrs={},text){
   if(text!==undefined)el.textContent=String(text);
   return el;
 }
-function widthForLabel(label){return label==='EMPTY'?48:Math.max(76,textWidth(label,'20px Georgia')+34);}
+function labelSubscripts(node){
+  const parts=[];
+  const feature=String(node.label_features??'').trim();
+  const index=String(node.coindexation??'').trim();
+
+  if(feature)parts.push({text:feature,italic:false});
+  if(index)parts.push({
+    text:index.startsWith('*')?`(${index})`:index,
+    italic:true
+  });
+  if(node.trace)parts.push({text:'t',italic:true});
+
+  return parts;
+}
+
+function lexicalSubscripts(node){
+  const feature=String(node.lexical_features??'').trim();
+  return feature?[{
+    text:feature,
+    italic:!feature.startsWith('[')
+  }]:[];
+}
+
+function annotatedWidth(base,parts=[],bold=false){
+  let width=textWidth(base,`${bold?'bold ':''}20px Georgia`);
+
+  for(const part of parts){
+    width+=3+textWidth(
+      part.text,
+      `${part.italic?'italic ':''}13px Georgia`
+    );
+  }
+  return width;
+}
+
+function widthForLabel(label,parts=[],bold=false){
+  if(label==='EMPTY')return 48;
+  const mainWidth=textWidth(label,`${bold?'bold ':''}20px Georgia`);
+  const subWidth=annotatedWidth(label,parts,bold)-mainWidth;
+  return Math.max(76,mainWidth+2*subWidth+34);
+}
+
+function appendAnnotatedText(parent,base,parts,x,y,{bold=false,middle=false,color=INK}={}){
+  let left=x-textWidth(base,`${bold?'bold ':''}20px Georgia`)/2;
+
+  const mainAttrs={
+    x:left,y,
+    'font-family':'Georgia,serif',
+    'font-size':20,
+    fill:color
+  };
+
+  if(bold)mainAttrs['font-weight']='bold';
+  if(middle)mainAttrs['dominant-baseline']='middle';
+
+  parent.append(svgEl('text',mainAttrs,base));
+  left+=textWidth(base,`${bold?'bold ':''}20px Georgia`);
+
+  for(const part of parts){
+    left+=3;
+    const attrs={
+      x:left,
+      y:y+8,
+      'font-family':'Georgia,serif',
+      'font-size':13,
+      fill:color
+    };
+
+    if(part.italic)attrs['font-style']='italic';
+    if(middle)attrs['dominant-baseline']='middle';
+
+    parent.append(svgEl('text',attrs,part.text));
+    left+=textWidth(
+      part.text,
+      `${part.italic?'italic ':''}13px Georgia`
+    );
+  }
+}
 function layoutTree(){
   const widths=new Map(),labelWidths=new Map(),points=new Map(),terminals=[],triangles=[],edges=[];
   const text=words();let maxDepth=0;
   function measure(node,depth=0){
     if(depth>35)throw Error('Tree is too deep to display.');
-    const lw=widthForLabel(node.label);labelWidths.set(node.uid,lw);
+    const lw=widthForLabel(node.label,labelSubscripts(node),true);labelWidths.set(node.uid,lw);
     let width=lw;
     if(node.children.length){
       width=Math.max(lw,node.children.reduce((sum,c)=>sum+measure(c,depth+1),0)+H_GAP*(node.children.length-1));
     }else if(node.triangle_text!==null){
       width=Math.max(lw,textWidth(node.triangle_text,'20px Georgia')+34,125);
     }else if(node.null_element){
-      width=Math.max(lw,widthForLabel('Ø'));
+      width=Math.max(lw,widthForLabel('Ø',lexicalSubscripts(node)));
     }else if(node.word_index!==null&&node.word_index>=0&&node.word_index<text.length){
-      width=Math.max(lw,widthForLabel(text[node.word_index]));
+      width=Math.max(lw,widthForLabel(text[node.word_index],lexicalSubscripts(node)));
     }
     widths.set(node.uid,width);return width;
   }
@@ -843,10 +920,10 @@ function layoutTree(){
       triangles.push({phrase:node.triangle_text,x:mid,y,span:widths.get(node.uid)});
       maxDepth=Math.max(maxDepth,depth+1);
     }else if(node.null_element){
-      terminals.push({text:'Ø',x:mid,y:y+39});
+      terminals.push({text:'Ø',parts:lexicalSubscripts(node),x:mid,y:y+39});
       maxDepth=Math.max(maxDepth,depth+1);
     }else if(node.word_index!==null&&node.word_index>=0&&node.word_index<text.length){
-      terminals.push({text:text[node.word_index],x:mid,y:y+39});
+      terminals.push({text:text[node.word_index],parts:lexicalSubscripts(node),x:mid,y:y+39});
       maxDepth=Math.max(maxDepth,depth+1);
     }
   }
@@ -864,7 +941,11 @@ function geometryOfTree(layout){
     add(p.x-w/2,p.y,p.x+w/2,p.y+47);
   }
   for(const e of layout.edges)add(Math.min(e.x1,e.x2),Math.min(e.y1,e.y2),Math.max(e.x1,e.x2),Math.max(e.y1,e.y2));
-  for(const t of layout.terminals){const w=textWidth(t.text);add(t.x-w/2,t.y+4,t.x+w/2,t.y+33);}
+  for(const t of layout.terminals){
+    const mainWidth=textWidth(t.text,'20px Georgia');
+    const subWidth=annotatedWidth(t.text,t.parts)-mainWidth;
+    add(t.x-mainWidth/2,t.y+4,t.x+mainWidth/2+subWidth,t.y+40);
+}
   for(const t of layout.triangles){const w=Math.max(65,t.span/2-4);add(t.x-w,t.y+48,t.x+w,t.y+126);}
   if(!isFinite(left))return {left:0,top:0,right:0,bottom:0};
   return {left,top,right,bottom};
@@ -952,17 +1033,57 @@ function createTreeSvg(layout,comments){
   }
   for(const n of walk(root)){
     const point=layout.points.get(n.uid),w=layout.labelWidths.get(n.uid);
-    const group=svgEl('g',{'class':'tree-node',transform:`translate(${point.x-w/2} ${point.y})`,'data-uid':n.uid,tabindex:0,role:'button','aria-label':heading(n.label)});
-    group.append(svgEl('rect',{'class':'hit',x:0,y:0,width:w,height:47,fill:'transparent'}));
-    if(n.label==='EMPTY')group.append(svgEl('rect',{'class':'hover-frame',
-      x:1,y:1,width:w-2,height:45,rx:10,fill:'none',stroke:'#9daabc',
-      'stroke-width':1,'stroke-dasharray':'4 4',opacity:0}));
-    const frame=svgEl('rect',{'class':'selection-frame',x:1,y:1,width:w-2,height:45,rx:10,fill:'none',stroke:'#1747ad','stroke-width':3,
-      visibility:n.uid===selectedUid?'visible':'hidden'});
-    group.append(frame);
-    if(n.label!=='EMPTY')group.append(svgEl('text',{x:w/2,y:24,'text-anchor':'middle','dominant-baseline':'middle',
-      'font-family':'Georgia,serif','font-size':20,'font-weight':'bold',fill:INK},n.label));
+    const parts=labelSubscripts(n);
+    const mainWidth=textWidth(n.label,'bold 20px Georgia');
+    const annotated=n.label!=='EMPTY'&&parts.length>0;
+    const hitX=annotated?w/2-mainWidth/2-12:0;
+    const hitW=annotated?annotatedWidth(n.label,parts,true)+24:w;
 
+    const group=svgEl('g',{
+      'class':'tree-node',
+      transform:`translate(${point.x-w/2} ${point.y})`,
+      'data-uid':n.uid,
+      tabindex:0,
+      role:'button',
+      'aria-label':heading(n.label)
+    });
+
+    group.append(svgEl('rect',{
+      'class':'hit',
+      x:hitX,y:0,width:hitW,height:47,
+      fill:'transparent'
+    }));
+
+    if(n.label==='EMPTY')group.append(svgEl('rect',{
+      'class':'hover-frame',
+      x:1,y:1,width:w-2,height:45,rx:10,
+      fill:'none',stroke:'#9daabc',
+      'stroke-width':1,
+      'stroke-dasharray':'4 4',
+      opacity:0
+    }));
+
+    const frame=svgEl('rect',{
+      'class':'selection-frame',
+      x:annotated?hitX+1:1,
+      y:1,
+      width:annotated?hitW-2:w-2,
+      height:45,
+      rx:10,
+      fill:'none',
+      stroke:'#1747ad',
+      'stroke-width':3,
+      visibility:n.uid===selectedUid?'visible':'hidden'
+    });
+
+    group.append(frame);
+
+    if(n.label!=='EMPTY'){
+      appendAnnotatedText(group,n.label,parts,w/2,24,{
+        bold:true,
+        middle:true
+      });
+    }
     group.style.touchAction='manipulation';
 
     group.addEventListener('click',event=>{
@@ -1010,7 +1131,7 @@ function createTreeSvg(layout,comments){
       'font-family':'Georgia,serif','font-size':20,fill:'#24334d'},t.phrase));
   }
   for(const t of layout.terminals){
-    content.append(svgEl('text',{x:t.x,y:t.y+28,'text-anchor':'middle','font-family':'Georgia,serif','font-size':20,fill:'#24334d'},t.text));
+    appendAnnotatedText(content,t.text,t.parts,t.x,t.y+28,{color:'#24334d'});
   }
   for(const info of comments){
     const {comment,x,y,w,h,lines}=info;
