@@ -17,7 +17,21 @@ export const uid = () => {
   return Math.random().toString(16).slice(2,14).padEnd(12,'0');
 };
 export function makeNode(label='?') {
-  return {label,uid:uid(),word_index:null,null_element:false,triangle_text:null,triangle_indices:[],comments:[],children:[]};
+  return {
+    label,
+    uid:uid(),
+    word_index:null,
+    null_element:false,
+    label_features:'',
+    lexical_features:'',
+    form_feature:'',
+    coindexation:'',
+    trace:false,
+    triangle_text:null,
+    triangle_indices:[],
+    comments:[],
+    children:[]
+  };
 }
 export function normalizeNode(raw) {
   if (!raw || typeof raw !== 'object') throw Error('Invalid syntax tree.');
@@ -26,6 +40,11 @@ export function normalizeNode(raw) {
     uid: String(raw.uid || uid()),
     word_index: raw.word_index ?? null,
     null_element: raw.null_element === true,
+    label_features: String(raw.label_features ?? ''),
+    lexical_features: String(raw.lexical_features ?? ''),
+    form_feature: String(raw.form_feature ?? ''),
+    coindexation: String(raw.coindexation ?? ''),
+    trace: raw.trace === true,
     triangle_text: raw.triangle_text ?? null,
     triangle_indices: [...(raw.triangle_indices ?? [])],
     comments: (raw.comments ?? []).map(c => ({...c})),
