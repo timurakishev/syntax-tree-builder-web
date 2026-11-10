@@ -17,7 +17,7 @@ export const uid = () => {
   return Math.random().toString(16).slice(2,14).padEnd(12,'0');
 };
 export function makeNode(label='?') {
-  return {label,uid:uid(),word_index:null,triangle_text:null,triangle_indices:[],comments:[],children:[]};
+  return {label,uid:uid(),word_index:null,null_element:false,triangle_text:null,triangle_indices:[],comments:[],children:[]};
 }
 export function normalizeNode(raw) {
   if (!raw || typeof raw !== 'object') throw Error('Invalid syntax tree.');
@@ -25,6 +25,7 @@ export function normalizeNode(raw) {
     label: String(raw.label ?? '?'),
     uid: String(raw.uid || uid()),
     word_index: raw.word_index ?? null,
+    null_element: raw.null_element === true,
     triangle_text: raw.triangle_text ?? null,
     triangle_indices: [...(raw.triangle_indices ?? [])],
     comments: (raw.comments ?? []).map(c => ({...c})),
@@ -51,11 +52,11 @@ export function tokenize(sentence) {
 }
 export function allowedLabels(root,node) {
   let labels = node===root ? CATEGORIES.slice(0,13) : [...CATEGORIES];
-  if (node.children.length || node.word_index!==null || node.triangle_text!==null)
+  if (node.children.length || node.word_index!==null || node.triangle_text!==null || node.null_element)
     labels=labels.filter(x=>x!=='EMPTY');
   if (node.children.length) labels=labels.filter(x=>isPhrase(x)||isProjection(x));
   if (node.triangle_text!==null) labels=labels.filter(x=>isPhrase(x)&&x!=='EMPTY');
-  if (node.word_index!==null) labels=labels.filter(isHead);
+  if (node.word_index!==null || node.null_element) labels=labels.filter(isHead);
   return labels;
 }
 export function ensureTreeShape(root,words) {
@@ -66,6 +67,8 @@ export function ensureTreeShape(root,words) {
     if(n.children.length>3) throw Error('Nodes with more than three daughters are not supported.');
     if(n.word_index!==null && (!Number.isInteger(n.word_index)||n.word_index<0||n.word_index>=words.length))
       throw Error('Invalid terminal word index in saved tree.');
+    if(n.null_element && (n.word_index!==null || n.children.length || !isHead(n.label) || n.triangle_text!==null))
+      throw Error('A null lexical item requires a terminal head.');    
     if(n.triangle_text!==null){
       if(typeof n.triangle_text!=='string'||!n.triangle_text.trim()||n.triangle_text.length>300)
         throw Error('Invalid triangle text in saved tree.');
