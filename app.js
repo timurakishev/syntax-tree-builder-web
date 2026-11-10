@@ -13,7 +13,7 @@ const iconPaths={
   branches:'<circle cx="6" cy="5" r="2"/><circle cx="18" cy="5" r="2"/><circle cx="12" cy="19" r="2"/><path d="M6 7v3a6 6 0 0 0 6 6v1M18 7v3a6 6 0 0 1-6 6"/>',
   label:'<path d="M4 20l4.5-1L20 7a2.12 2.12 0 0 0-3-3L5 16zM15 6l3 3"/>',
   word:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M8 9h8M12 9v7M9 16h6"/>',
-  features:'<path d="M8 4H5v16h3M16 4h3v16h-3"/><circle cx="9.5" cy="12" r=".9" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r=".9" fill="currentColor" stroke="none"/><circle cx="14.5" cy="12" r=".9" fill="currentColor" stroke="none"/>',
+  features:'<path d="M8 4H5v16h3M16 4h3v16h-3"/><text x="12" y="16.2" text-anchor="middle" font-size="13" font-family="Georgia,serif" font-weight="bold" font-style="italic" fill="currentColor" stroke="none">f</text>',
   comment:'<path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5 9 9 0 0 1-4-.9L3 21l1.9-5.5A8.5 8.5 0 1 1 21 11.5z"/>',
   delete:'<path d="M3 6h18M8 6V4h8v2M5 6l1 15h12l1-15M10 10v7M14 10v7"/>',
   reset:'<path d="m7 21-4-4a2 2 0 0 1 0-3l10-10a2 2 0 0 1 3 0l5 5a2 2 0 0 1 0 3L11 21"/><path d="M22 21H7"/><path d="m5 11 9 9"/>',
@@ -22,7 +22,7 @@ const iconPaths={
 };
 const TOOL_CONFIG=[
   ['branches','Add branches'],['label','Change label'],['word','Attach/Edit word'],
-  ['features','Attach/Edit features'],['comment','Add comment'],
+  ['features','Attach/Edit feature'],['comment','Add comment'],
   ['delete','Delete subtree'],['reset','Reset tree']
 ];
 const toolButtons={};
@@ -343,7 +343,7 @@ function editFeatures(){
   if(!node||!ready()||node.label==='EMPTY'||
      (!isHead(node.label)&&!isPhrase(node.label)))return;
   
-  showDialog(`Attach/Edit features — ${heading(node.label)}`,(body,footer)=>{
+  showDialog(`Attach/Edit feature — ${heading(node.label)}`,(body,footer)=>{
     const fields={};
 
     const addField=(key,title,help,presets,replacePreset=false)=>{
