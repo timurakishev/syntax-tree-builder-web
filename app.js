@@ -161,6 +161,7 @@ function inputDialog(title,prompt,value='',opts={}){
       field.addEventListener('input',update);update();
     }
     const finish=ok=>{const result=field.value;closeDialog();resolve({ok,value:result});};
+    if(opts.insertNull)addDialogButton(footer,'Insert Ø',()=>{closeDialog();resolve({ok:true,value:'Ø'});});
     addDialogButton(footer,'Cancel',()=>finish(false));addDialogButton(footer,'OK',()=>finish(true),true);
     $('closeDialog').onclick=()=>finish(false);
     field.addEventListener('keydown',e=>{if(e.key==='Enter'&&!opts.multiline){e.preventDefault();finish(true);}});
@@ -204,12 +205,11 @@ function enabled(name){
   if(!editable||!node)return false;
   if(name==='label')return true;
   if(name==='delete')return node.uid!==root.uid;
-  if(name==='branches')return node.word_index===null&&node.triangle_text===null&&
+  if(name==='branches')return node.word_index===null&&!node.null_element&&node.triangle_text===null&&
     node.children.length<(isPhrase(node.label)?3:2)&&node.label!=='?'&&node.label!=='EMPTY'&&
     (isPhrase(node.label)||isProjection(node.label));
   if(name==='word')return !node.children.length&&(
-    node.triangle_text!==null || (node.uid!==root.uid&&!isPhrase(node.label)&&!isProjection(node.label)&&node.label!=='?' &&
-    (mode==='free'||node.word_index!==null||new Set(used()).size<words().length)));
+    node.triangle_text!==null || (node.uid!==root.uid&&isHead(node.label)));
   return false;
 }
 function updateControls(){
@@ -227,7 +227,8 @@ function updateControls(){
   $('duplicateBtn').disabled=mode!=='practice'||!sentences.length||sentences.length>=1000;
   if(!node){$('selectionText').textContent='Click a node to select it';return;}
   let hint;
-  if(node.triangle_text!==null)hint='Click Attach/Edit word to edit or remove triangle';
+  if(node.null_element)hint='Click Attach/Edit word to replace or remove Ø';
+  else if(node.triangle_text!==null)hint='Click Attach/Edit word to edit or remove triangle';
   else if(enabled('branches'))hint=node.children.length?'Add another daughter if needed':'Click Add branches to expand';
   else hint='Double-click to change label';
   $('selectionText').textContent=`Selected: ${heading(node.label)}   ·   ${hint}`;
@@ -342,34 +343,87 @@ async function editTriangle(){
 async function attachWord(anchor){
   const node=currentNode();if(!node||!enabled('word'))return;
   if(node.triangle_text!==null){editTriangle();return;}
+
   if(mode==='free'){
-    const old=node.word_index!==null&&node.word_index<freeWords.length?freeWords[node.word_index]:'';
-    const {ok,value}=await inputDialog('Attach word','Enter a word (leave empty to remove):',old);
+    const old=node.null_element?'Ø':
+      (node.word_index!==null&&node.word_index<freeWords.length?freeWords[node.word_index]:'');
+
+    const {ok,value}=await inputDialog(
+      'Attach word',
+      'Enter a word (leave empty to remove):',
+      old,
+      {insertNull:true}
+    );
+
     if(!ok)return;
     const word=value.trim();
+
     if(word.length>100||word.includes('\n')){
-      await alertDialog('Invalid word','Enter a single short lexical item.');return;
+      await alertDialog('Invalid word','Enter a single short lexical item.');
+      return;
     }
+
     if(word===old)return;
+
     checkpoint();
-    if(!word)node.word_index=null;
-    else{node.word_index=freeWords.length;freeWords.push(word);}
-    afterEdit();return;
+
+    if(word==='Ø'){
+      node.word_index=null;
+      node.null_element=true;
+    }else if(!word){
+      node.word_index=null;
+      node.null_element=false;
+    }else{
+      node.word_index=freeWords.length;
+      node.null_element=false;
+      freeWords.push(word);
+    }
+
+    afterEdit();
+    return;
   }
-  const occupied=new Set(used()),items=[];
+
+  const occupied=new Set(used());
+
+  const items=[{
+    label:'Insert Ø (null element)',
+    action:()=>{
+      if(node.null_element)return;
+      checkpoint();
+      node.word_index=null;
+      node.null_element=true;
+      afterEdit();
+    }
+  }];
+
   words().forEach((token,index)=>{
-    if(!occupied.has(index)||index===node.word_index)items.push({
-      label:`${index+1}.  ${token}`,action:()=>{
-        if(node.word_index===index)return;
-        checkpoint();node.word_index=index;afterEdit();
+    if(!occupied.has(index)||index===node.word_index){
+      items.push({
+        label:`${index+1}.  ${token}`,
+        action:()=>{
+          if(node.word_index===index&&!node.null_element)return;
+          checkpoint();
+          node.word_index=index;
+          node.null_element=false;
+          afterEdit();
+        }
+      });
+    }
+  });
+
+  if(node.word_index!==null||node.null_element){
+    items.push({separator:true});
+    items.push({
+      label:node.null_element?'Remove null element':'Remove attached word',
+      action:()=>{
+        checkpoint();
+        node.word_index=null;
+        node.null_element=false;
+        afterEdit();
       }
     });
-  });
-  if(node.word_index!==null){
-    items.push({separator:true});items.push({label:'Remove attached word',action:()=>{
-      checkpoint();node.word_index=null;afterEdit();
-    }});
   }
+
   showMenu(anchor,items);
 }
 async function addComment(){
@@ -581,6 +635,8 @@ function layoutTree(){
       width=Math.max(lw,node.children.reduce((sum,c)=>sum+measure(c,depth+1),0)+H_GAP*(node.children.length-1));
     }else if(node.triangle_text!==null){
       width=Math.max(lw,textWidth(node.triangle_text,'20px Georgia')+34,125);
+    }else if(node.null_element){
+      width=Math.max(lw,widthForLabel('Ø'));
     }else if(node.word_index!==null&&node.word_index>=0&&node.word_index<text.length){
       width=Math.max(lw,widthForLabel(text[node.word_index]));
     }
@@ -600,6 +656,9 @@ function layoutTree(){
       }
     }else if(node.triangle_text!==null){
       triangles.push({phrase:node.triangle_text,x:mid,y,span:widths.get(node.uid)});
+      maxDepth=Math.max(maxDepth,depth+1);
+    }else if(node.null_element){
+      terminals.push({text:'Ø',x:mid,y:y+39});
       maxDepth=Math.max(maxDepth,depth+1);
     }else if(node.word_index!==null&&node.word_index>=0&&node.word_index<text.length){
       terminals.push({text:text[node.word_index],x:mid,y:y+39});
