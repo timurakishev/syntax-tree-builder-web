@@ -1416,22 +1416,6 @@ function initFloatingToolbar(){
 
     floatingPosition.x=x;
     floatingPosition.y=y;
-
-    const x=floatingPosition.right
-      ?Math.max(8,w-bar.offsetWidth-12)
-      :Math.min(Math.max(8,floatingPosition.x),Math.max(8,w-bar.offsetWidth-8));
-
-    const y=Math.min(
-      Math.max(8,floatingPosition.y),
-      Math.max(8,h-bar.offsetHeight-8)
-    );
-
-    bar.style.left=x+'px';
-    bar.style.top=y+'px';
-
-    floatingPosition.x=x;
-    floatingPosition.y=y;
-    
   }).observe(area);
 }
 function initCanvasPan(){
