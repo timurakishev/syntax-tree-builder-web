@@ -829,7 +829,7 @@ function lexicalSubscripts(node){
   const feature=String(node.lexical_features??'').trim();
   return feature?[{
     text:feature,
-    italic:!feature.startsWith('[')
+    italic:false
   }]:[];
 }
 
