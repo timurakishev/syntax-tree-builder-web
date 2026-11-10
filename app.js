@@ -406,8 +406,9 @@ function editFeatures(){
         '[FORM] feature',
         'Expanded notation displayed beneath the word, not beside the category label.',
         [
-          '[+V, FORM preterite]',
           '[+V, FORM bare]',
+          '[+V, FORM present]',
+          '[+V, FORM preterite]',
           '[+V, FORM participle]',
           '[+V, FORM gerund]'
         ],
