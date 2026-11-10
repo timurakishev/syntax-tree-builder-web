@@ -223,9 +223,12 @@
 /* Compact floating toolbar and enabled icon colors */
 
 .tool:not(:disabled) .tool-icon {
-  color: #1554bf;
+  color: #2a3b56;
 }
 
+.tool.primary-soft:not(:disabled) .tool-icon {
+  color: #1554bf;
+}
 .tool .tool-icon svg {
   stroke: currentColor;
 }
@@ -241,6 +244,10 @@
 .float-btn {
   width: 34px;
   height: 36px;
+  color: #2a3b56;
+}
+
+.float-btn.float-branches:not(:disabled) {
   color: #1554bf;
 }
 
