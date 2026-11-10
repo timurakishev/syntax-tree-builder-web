@@ -824,6 +824,12 @@ async function openProgress(file){
   if(mode!=='practice')return;
   try{
     const parsed=readProgress(JSON.parse(await file.text()));
+
+    if(sentences.length&&!await confirmDialog(
+      'Replace current work',
+      'Opening another progress file will replace your current worksheet and any unsaved changes. Continue?'
+    ))return;
+
     loadBankData({name:parsed.name,sentences:parsed.sentences,
       exercise_ids:parsed.exercise_ids,original_count:parsed.original_count});
     workingTrees=parsed.trees;currentIndex=parsed.current_index;
