@@ -280,3 +280,23 @@
   width: 22px;
   margin: 1px 0;
 }
+/* Primary buttons: normal and hover states */
+
+.dialog-footer button.primary:not(:disabled) {
+  background: #eaf2ff;
+  color: #1747ad;
+  border-color: #bcd2fc;
+  transition: background .15s, color .15s, border-color .15s;
+}
+
+.dialog-footer button.primary:hover:not(:disabled) {
+  background: #1747ad;
+  color: #ffffff;
+  border-color: #1747ad;
+}
+
+.dialog-footer button.primary:active:not(:disabled) {
+  background: #123a8c;
+  color: #ffffff;
+  border-color: #123a8c;
+}
