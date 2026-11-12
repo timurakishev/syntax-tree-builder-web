@@ -1590,8 +1590,8 @@ function init(){
       return;
     }
     showMenu($('progressMenuBtn'),[
-      {label:'Open',disabled:mode!=='practice',action:()=>$('openFile').click()},
-      {label:'Download',disabled:mode!=='practice'||!sentences.length,
+      {label:'Open progress',disabled:mode!=='practice',action:()=>$('openFile').click()},
+      {label:'Download progress',disabled:mode!=='practice'||!sentences.length,
         action:()=>saveProgress()}
     ]);
     $('progressMenuBtn').setAttribute('aria-expanded','true');
