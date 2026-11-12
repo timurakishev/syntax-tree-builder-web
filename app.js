@@ -792,6 +792,18 @@ function workDocument(){
     trees:Object.fromEntries(Object.entries(workingTrees).map(([i,t])=>[String(i),clone(t)]))
   };
 }
+function backupWorkInBrowser(){
+  if(mode!=='practice'||!sentences.length)return;
+
+  try{
+    localStorage.setItem(
+      'syntax-tree-builder-browser-backup-v1',
+      JSON.stringify(workDocument())
+    );
+  }catch(error){
+    setInfo('Browser backup unavailable. Use Save Progress to download your work.');
+  }
+}
 async function saveProgress(interactive=true){
   if(mode!=='practice'||!sentences.length){
     if(interactive)await alertDialog('Save work',mode!=='practice'
@@ -1310,6 +1322,7 @@ function render(){
   $('rightSide').classList.toggle('disabled',!canEdit);
   updateControls();
   if(canEdit){const reset=scrollReset;scrollReset=false;drawTree(reset);}
+  backupWorkInBrowser();
 }
 function changeZoom(factor){
   const current=zoom;
