@@ -186,7 +186,7 @@ function choiceDialog(title,prompt,options,selectedIndex=0){
 }
 function showAbout(){
   alertDialog('About Syntax Tree Builder',
-    'Syntax Tree Builder\n\nDeveloped by Timur Akishev (KIMEP University), 2026\nFree for educational, non-commercial use.\n\nThis is an initial test build, not a final release.\n\nContact: t.akishev@kimep.kz');
+    'Developed by Timur Akishev (KIMEP University), 2026. An interactive tool for building and exploring syntactic trees, designed for teaching, learning, and practice. Free for educational, non-commercial use.');
 }
 function showInstructions(){
   showDialog('Instructions',(body,footer)=>{
