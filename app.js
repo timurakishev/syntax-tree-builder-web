@@ -90,7 +90,8 @@ function showSubmenu(anchor,items){
 }
 function showMenu(anchor,items){
   closeMenu();const menu=$('contextMenu');
-  menu.style.width=anchor?.id==='progressMenuBtn'?'205px':'';
+  menu.style.width=anchor?.id==='progressMenuBtn'?'175px':'';
+  menu.style.minWidth=anchor?.id==='progressMenuBtn'?'0':'';
   for(const item of items){
     if(item.separator){menu.append(document.createElement('hr'));continue;}
     if(item.group){const heading=document.createElement('div');heading.className='group-label';heading.textContent=item.group;menu.append(heading);}
