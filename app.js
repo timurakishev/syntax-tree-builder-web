@@ -703,14 +703,12 @@ async function saveAndGo(){
   const value=$('jumpInput').value.trim().toLowerCase(),index=exerciseIds.indexOf(value);
   if(index<0){await alertDialog('Invalid exercise number','Enter an existing exercise number.');return;}
   if(index===currentIndex){$('jumpInput').value=exerciseIds[currentIndex];return;}
-  const previous=currentIndex;switchExercise(index);
-  if(workFilename&&!await saveProgress(false)){switchExercise(previous);return;}
+  switchExercise(index);
   $('jumpInput').value=exerciseIds[currentIndex];
 }
 async function saveAndNext(){
   if(mode!=='practice'||currentIndex>=sentences.length-1)return;
-  const previous=currentIndex;switchExercise(previous+1);
-  if(workFilename&&!await saveProgress(false))switchExercise(previous);
+  switchExercise(currentIndex+1);
 }
 function duplicateExercise(){
   if(mode!=='practice'||!sentences.length)return;
@@ -729,7 +727,6 @@ function duplicateExercise(){
   workingTrees[insertAt]=clone(root);
   currentIndex=insertAt;root=normalizeNode(workingTrees[insertAt]);
   selectedUid=null;undoStack=[];redoStack=[];scrollReset=true;render();
-  if(workFilename)saveProgress(false);
 }
 
 async function deleteDuplicate(){
@@ -771,8 +768,7 @@ async function deleteDuplicate(){
 
   render();
 
-  if(workFilename)await saveProgress(false);
-  else setInfo(`Deleted duplicate exercise ${label}`);
+  setInfo(`Deleted duplicate exercise ${label}`);
 }
 async function importWorksheet(file){
   try {
