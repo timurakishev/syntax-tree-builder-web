@@ -27,8 +27,19 @@
 .tree-node .hover-frame{pointer-events:none}
 .tree-node .selection-frame{pointer-events:none}
 .node-word{cursor:default}
-.comment-bubble{cursor:grab;filter:drop-shadow(0 3px 8px rgba(34,58,89,.09))}
-.comment-bubble:active{cursor:grabbing}
+.comment-bubble {
+  cursor: grab;
+  filter: drop-shadow(0 3px 8px rgba(34,58,89,.09));
+}
+
+.comment-bubble:hover rect {
+  fill: #dceaff;
+  stroke: #91bafa;
+}
+
+.comment-bubble:active {
+  cursor: grabbing;
+}
 .comment-body{font:14.5px 'Segoe UI',Arial,sans-serif;fill:#14233e}
 .comment-head{font:600 12px 'Segoe UI',Arial,sans-serif;fill:#35639b}
 .placeholder{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:36px;color:#586c87;text-align:center;font-size:17px;line-height:1.8;background:#fff}
@@ -222,18 +233,18 @@
 #prevBtn:hover:not(:disabled),
 #nextBtn:hover:not(:disabled),
 #jumpBtn:hover:not(:disabled) {
-  background: #1747ad;
-  color: #ffffff;
-  border-color: #1747ad;
+  background: #eff5ff;
+  color: #2a3b56;
+  border-color: #b8d0f4;
 }
 
 #importBtn:active:not(:disabled),
 #prevBtn:active:not(:disabled),
 #nextBtn:active:not(:disabled),
 #jumpBtn:active:not(:disabled) {
-  background: #123a8c;
-  color: #ffffff;
-  border-color: #123a8c;
+  background: #dcebff;
+  color: #2a3b56;
+  border-color: #b8d0f4;
 }
 
 #importBtn:disabled,
@@ -332,20 +343,20 @@
 /* Primary buttons: normal and hover states */
 
 .dialog-footer button.primary:not(:disabled) {
-  background: #eaf2ff;
-  color: #1747ad;
-  border-color: #bcd2fc;
+  background: #ffffff;
+  color: #2a3b56;
+  border-color: #dbe3ef;
   transition: background .15s, color .15s, border-color .15s;
 }
 
 .dialog-footer button.primary:hover:not(:disabled) {
-  background: #1747ad;
-  color: #ffffff;
-  border-color: #1747ad;
+  background: #eff5ff;
+  color: #2a3b56;
+  border-color: #b8d0f4;
 }
 
 .dialog-footer button.primary:active:not(:disabled) {
-  background: #123a8c;
-  color: #ffffff;
-  border-color: #123a8c;
+  background: #dcebff;
+  color: #2a3b56;
+  border-color: #b8d0f4;
 }
