@@ -797,7 +797,7 @@ function backupWorkInBrowser(){
       JSON.stringify(workDocument())
     );
   }catch(error){
-    setInfo('Browser backup unavailable. Use Save Progress to download your work.');
+    setInfo('Browser backup unavailable. Use Download Progress to keep your work.');
   }
 }
 async function restoreBrowserBackup(){
@@ -839,36 +839,28 @@ async function restoreBrowserBackup(){
   scrollReset=true;
 
   render();
-  setInfo('Previous work restored. Use Save Progress to download a separate copy.');
+  setInfo('Previous work restored. Use Download Progress to keep a separate copy.');
 }
 async function saveProgress(interactive=true){
   if(mode!=='practice'||!sentences.length){
-    if(interactive)await alertDialog('Save work',mode!=='practice'
-      ?'Editable saving for Free Mode will be implemented later. For now you can export the Free Mode tree as PNG.'
+    if(interactive)await alertDialog('Download progress',mode!=='practice'
+      ?'Editable progress downloads are available in Practice/Exam Mode. You can export a Free Mode tree as PNG.'
       :'Import an XLSX worksheet first.');
     return false;
   }
-  let text=JSON.stringify(workDocument(),null,2);
   try{
-    if(!workHandle&&'showSaveFilePicker' in window && interactive){
-      workHandle=await window.showSaveFilePicker({suggestedName:'syntax_tree_progress.stb.json',
-        types:[{description:'Syntax Tree Builder work',accept:{'application/json':['.json']}}]});
-      workFilename=workHandle.name;
-    }
-    if(workHandle){
-      const writable=await workHandle.createWritable();
-      await writable.write(text);await writable.close();
-      setInfo(`Progress saved: ${workFilename}`);return true;
-    }
-    // Downloads are used when the browser cannot write back to an existing file.
-    workFilename=workFilename??'syntax_tree_progress.stb.json';
-    downloadFile(workFilename,text,'application/json;charset=utf-8');
-    setInfo(`Progress downloaded: ${workFilename}`);return true;
+    const filename=workFilename??'syntax_tree_progress.stb.json';
+    const text=JSON.stringify(workDocument(),null,2);
+    downloadFile(filename,text,'application/json;charset=utf-8');
+    setInfo(`Download started: ${filename}. Check your Downloads folder.`);
+    return true;
   }catch(e){
-    if(e.name==='AbortError')return false;
-    await alertDialog('Cannot save progress',e.message);return false;
+    await alertDialog('Cannot download progress',e.message);
+    return false;
   }
 }
+
+async function openProgress(file){
 async function openProgress(file){
   if(mode!=='practice')return;
   try{
