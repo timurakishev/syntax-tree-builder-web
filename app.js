@@ -188,7 +188,41 @@ function showAbout(){
   alertDialog('About Syntax Tree Builder',
     'Syntax Tree Builder\n\nDeveloped by Timur Akishev (KIMEP University), 2026\nFree for educational, non-commercial use.\n\nThis is an initial test build, not a final release.\n\nContact: t.akishev@kimep.kz');
 }
+function showInstructions(){
+  showDialog('Instructions',(body,footer)=>{
+    const section=(title,paragraphs)=>{
+      const heading=document.createElement('div');
+      heading.className='field-label';
+      heading.textContent=title;
+      body.append(heading);
 
+      for(const message of paragraphs){
+        const p=document.createElement('p');
+        p.textContent=message;
+        body.append(p);
+      }
+    };
+
+    section('Free Mode',[
+      'Build and edit a syntax tree freely, without importing a worksheet.',
+      'You can export the current tree as an image. Editable progress files and automatic browser backups are not available for Free Mode.'
+    ]);
+
+    section('Practice/Exam Mode',[
+      'Import the XLSX worksheet provided by your instructor. Each sentence or phrase becomes a separate exercise.',
+      'Build your trees and switch between exercises using Previous, Next, or Go to. Your work is automatically backed up in this browser.'
+    ]);
+
+    section('Saving and continuing your work',[
+      'Download Progress saves the entire worksheet and all your trees as one editable .stb.json file. Download it before finishing, switching devices, or submitting editable work.',
+      'Open Progress loads a previously downloaded .stb.json file so you can continue editing.',
+      'When you reopen the app on the same browser, you may be offered your previous automatic backup. Browser backups can be lost if browser data is cleared, so keep your downloaded progress file.',
+      'Export PNG saves an image of the current tree; it is not an editable progress file.'
+    ]);
+
+    addDialogButton(footer,'Close',closeDialog,true);
+  });
+}
 function icon(name,color='currentColor'){
   return `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="${color}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${iconPaths[name]}</svg>`;
 }
@@ -1535,6 +1569,7 @@ function init(){
   $('freeTab').onclick=()=>switchMode('free');
   $('practiceTab').onclick=()=>switchMode('practice');
   $('aboutBtn').onclick=showAbout;
+  $('instructionsBtn').onclick=showInstructions;
   $('leftToggle').onclick=()=>{leftCollapsed=!leftCollapsed;render();};
   $('rightToggle').onclick=()=>{rightCollapsed=!rightCollapsed;render();};
   $('zoomIn').onclick=()=>changeZoom(1.15);$('zoomOut').onclick=()=>changeZoom(1/1.15);
