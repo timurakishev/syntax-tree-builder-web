@@ -859,8 +859,6 @@ async function saveProgress(interactive=true){
     return false;
   }
 }
-
-async function openProgress(file){
 async function openProgress(file){
   if(mode!=='practice')return;
   try{
