@@ -192,7 +192,7 @@
 /* Exercise navigation buttons */
 .nav-buttons {
   justify-content: flex-start;
-  gap: 14px;
+  gap: 6px;
 }
 
 .nav-buttons button {
@@ -201,6 +201,48 @@
   font-size: 13px;
   padding: 8px 6px;
   min-height: 36px;
+}
+
+/* Go to label */
+.jump label {
+  font-weight: 700;
+}
+
+/* Worksheet and navigation buttons */
+#importBtn,
+#prevBtn,
+#nextBtn,
+#jumpBtn {
+  background: #ffffff;
+  color: #2a3b56;
+  border-color: #dbe3ef;
+}
+
+#importBtn:hover:not(:disabled),
+#prevBtn:hover:not(:disabled),
+#nextBtn:hover:not(:disabled),
+#jumpBtn:hover:not(:disabled) {
+  background: #1747ad;
+  color: #ffffff;
+  border-color: #1747ad;
+}
+
+#importBtn:active:not(:disabled),
+#prevBtn:active:not(:disabled),
+#nextBtn:active:not(:disabled),
+#jumpBtn:active:not(:disabled) {
+  background: #123a8c;
+  color: #ffffff;
+  border-color: #123a8c;
+}
+
+#importBtn:disabled,
+#prevBtn:disabled,
+#nextBtn:disabled,
+#jumpBtn:disabled {
+  background: #ffffff;
+  color: #aab5c5;
+  border-color: #e8ecf2;
 }
 /* Feature editor preset buttons */
 
