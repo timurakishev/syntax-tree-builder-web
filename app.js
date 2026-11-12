@@ -73,6 +73,7 @@ function downloadFile(name,content,type){
 
 function closeMenu(){
   for(const id of ['contextMenu','subMenu']){const menu=$(id);menu.hidden=true;menu.replaceChildren();}
+  $('progressMenuBtn')?.setAttribute('aria-expanded','false');
   menuOpen=false;
 }
 function showSubmenu(anchor,items){
@@ -304,8 +305,6 @@ function updateControls(){
   }
   $('floatingUndo').disabled=!ready()||!undoStack.length;
   $('floatingRedo').disabled=!ready()||!redoStack.length;
-  $('openBtn').disabled=mode!=='practice';
-  $('saveBtn').disabled=mode!=='practice'||!sentences.length;
   $('pngBtn').disabled=!ready();
   $('prevBtn').disabled=mode!=='practice'||!sentences.length||currentIndex<=0;
   $('nextBtn').disabled=mode!=='practice'||!sentences.length||currentIndex>=sentences.length-1;
@@ -1585,17 +1584,27 @@ function init(){
   $('importFile').onchange=async event=>{
     const file=event.target.files[0];event.target.value='';if(file)await importWorksheet(file);
   };
-  $('openBtn').onclick=()=>$('openFile').click();
+  $('progressMenuBtn').onclick=()=>{
+    if($('progressMenuBtn').getAttribute('aria-expanded')==='true'){
+      closeMenu();
+      return;
+    }
+    showMenu($('progressMenuBtn'),[
+      {label:'Open',disabled:mode!=='practice',action:()=>$('openFile').click()},
+      {label:'Download',disabled:mode!=='practice'||!sentences.length,
+        action:()=>saveProgress()}
+    ]);
+    $('progressMenuBtn').setAttribute('aria-expanded','true');
+  };
   $('openFile').onchange=async event=>{
     const file=event.target.files[0];event.target.value='';if(file)await openProgress(file);
   };
-  $('saveBtn').onclick=()=>saveProgress();
   $('pngBtn').onclick=exportPNG;
   $('overlay').addEventListener('click',event=>{
     if(event.target===$('overlay'))$('closeDialog').click();
   });
   document.addEventListener('pointerdown',event=>{
-    if(menuOpen&&!event.target.closest('#contextMenu,#subMenu'))closeMenu();
+    if(menuOpen&&!event.target.closest('#contextMenu,#subMenu,#progressMenuBtn'))closeMenu();
   },true);
   document.addEventListener('keydown',event=>{
     if(event.key==='Escape'){
