@@ -804,6 +804,47 @@ function backupWorkInBrowser(){
     setInfo('Browser backup unavailable. Use Save Progress to download your work.');
   }
 }
+async function restoreBrowserBackup(){
+  let parsed;
+
+  try{
+    const saved=localStorage.getItem('syntax-tree-builder-browser-backup-v1');
+    if(!saved)return;
+
+    parsed=readProgress(JSON.parse(saved));
+  }catch(error){
+    await alertDialog('Cannot restore browser backup',
+      'The previous browser backup could not be read. Use Open Progress if you downloaded a progress file.');
+    return;
+  }
+
+  if(!await confirmDialog('Restore previous work',
+    `An automatic backup for "${parsed.name}" was found on this device. Continue where you left off?`))return;
+
+  if(mode==='free')freeTree=clone(root);
+
+  mode='practice';
+  bankName=parsed.name;
+  sentences=parsed.sentences;
+  exerciseIds=parsed.exercise_ids;
+  originalCount=parsed.original_count;
+  workingTrees=parsed.trees;
+  currentIndex=parsed.current_index;
+
+  root=workingTrees[currentIndex]
+    ?normalizeNode(workingTrees[currentIndex])
+    :makeNode('?');
+
+  selectedUid=root.uid;
+  workHandle=null;
+  workFilename=null;
+  undoStack=[];
+  redoStack=[];
+  scrollReset=true;
+
+  render();
+  setInfo('Previous work restored. Use Save Progress to download a separate copy.');
+}
 async function saveProgress(interactive=true){
   if(mode!=='practice'||!sentences.length){
     if(interactive)await alertDialog('Save work',mode!=='practice'
@@ -1559,5 +1600,6 @@ function init(){
   });
   initCanvasPan();initFloatingToolbar();
   scrollReset=true;render();
+  restoreBrowserBackup();
 }
 init();
