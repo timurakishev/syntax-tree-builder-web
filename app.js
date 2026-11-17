@@ -11,6 +11,7 @@ const BG='#ffffff', INK='#14233e', EDGE='#53647c';
 const TOP=95, SIDE=105, V_GAP=124, H_GAP=24;
 const iconPaths={
   branches:'<circle cx="6" cy="5" r="2"/><circle cx="18" cy="5" r="2"/><circle cx="12" cy="19" r="2"/><path d="M6 7v3a6 6 0 0 0 6 6v1M18 7v3a6 6 0 0 1-6 6"/>',
+  parent:'<circle cx="12" cy="4" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="20" r="2"/><path d="M12 6v4M12 14v4"/>',
   label:'<path d="M4 20l4.5-1L20 7a2.12 2.12 0 0 0-3-3L5 16zM15 6l3 3"/>',
   word:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M8 9h8M12 9v7M9 16h6"/>',
   features:'<path d="M8 4H5v16h3M16 4h3v16h-3"/><text x="12" y="16.2" text-anchor="middle" font-size="13" font-family="Georgia,serif" font-weight="bold" font-style="italic" fill="currentColor" stroke="none">f</text>',
@@ -21,7 +22,8 @@ const iconPaths={
   redo:'<path d="m15 14 5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h2"/>'
 };
 const TOOL_CONFIG=[
-  ['branches','Add branches'],['label','Change label'],['word','Attach/Edit word'],
+  ['branches','Add branches'],['parent','Insert parent above'],
+  ['label','Change label'],['word','Attach/Edit word'],
   ['features','Attach/Edit feature'],['comment','Add comment'],
   ['delete','Delete subtree'],['reset','Reset tree']
 ];
@@ -62,6 +64,16 @@ function branchDepth(node){
 function availableBranchRoom(node){
   if(!eligibleBranchParent(node)||branchDepth(node)>=35)return 0;
   return Math.max(0,Math.min(3-node.children.length,150-[...walk(root)].length));
+}
+
+function subtreeHeight(node){
+  if(!node.children.length)return 0;
+  return 1+Math.max(...node.children.map(subtreeHeight));
+}
+
+function canInsertParentAbove(node){
+  return !!node&&[...walk(root)].length<150&&
+    branchDepth(node)+subtreeHeight(node)<35;
 }
 const textWidth=(str,font='20px Georgia')=>{textCtx.font=font;return textCtx.measureText(String(str)).width;};
 
@@ -321,6 +333,7 @@ function enabled(name){
       (isHead(node.label)||isPhrase(node.label));
   }
   
+  if(name==='parent')return canInsertParentAbove(node);
   if(name==='delete')return node.uid!==root.uid;
   if(name==='branches')return availableBranchRoom(node)>0||
     (eligibleBranchParent(node)&&isPhrase(node.label)&&!node.children.length);
@@ -406,6 +419,32 @@ function addBranches(anchor){
     choices.push({label:`Add daughter on right${note}`,action:()=>insert(existing)});
   }
   showMenu(anchor,choices);
+}
+
+function insertParentAbove(){
+  const node=currentNode();
+  if(!node||!enabled('parent'))return;
+
+  const existingParent=findParent(root,node.uid);
+  const index=existingParent
+    ?existingParent.children.findIndex(child=>child.uid===node.uid)
+    :-1;
+  if(existingParent&&index<0)return;
+
+  checkpoint();
+  const newParent=makeNode('?');
+  newParent.children=[node];
+
+  if(existingParent){
+    existingParent.children[index]=newParent;
+  }else{
+    newParent.comments=node.comments;
+    node.comments=[];
+    root=newParent;
+  }
+
+  selectedUid=newParent.uid;
+  afterEdit();
 }
 function changeLabel(anchor){
   const node=currentNode();if(!node||!ready())return;
@@ -761,7 +800,8 @@ async function resetTree(){
 }
 function runTool(name,anchor){
   if(!enabled(name))return;
-  ({branches:()=>addBranches(anchor),label:()=>changeLabel(anchor),word:()=>attachWord(anchor),
+  ({branches:()=>addBranches(anchor),parent:insertParentAbove,
+    label:()=>changeLabel(anchor),word:()=>attachWord(anchor),
     features:editFeatures,comment:addComment,delete:deleteNode,reset:resetTree})[name]?.();
 }
 function switchMode(next){
