@@ -84,6 +84,15 @@ function setInfo(text,duration=7000) {
     }, duration);
   }
 }
+function showBackupNotice(){
+  setInfo('Backed up in this browser',6000);
+  const icon=document.createElementNS(NS,'svg');
+  icon.classList.add('backup-disk-icon');
+  icon.setAttribute('viewBox','0 0 24 24');
+  icon.setAttribute('aria-hidden','true');
+  icon.innerHTML='<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/>';
+  $('bottomInfo')?.prepend(icon);
+}
 function downloadFile(name,content,type){
   const blob=content instanceof Blob?content:new Blob([content],{type});
   const url=URL.createObjectURL(blob),a=document.createElement('a');
@@ -898,7 +907,7 @@ function backupWorkInBrowser(){
       if($('bottomInfo')?.textContent?.trim())return;
 
       lastBackupNoticeAt=Date.now();
-      setInfo('✓ Backed up in this browser',3000);
+      showBackupNotice();
     },1800);
   }catch(error){
     clearTimeout(backupNoticeTimer);
