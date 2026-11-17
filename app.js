@@ -72,7 +72,8 @@ function subtreeHeight(node){
 }
 
 function canInsertParentAbove(node){
-  return !!node&&[...walk(root)].length<150&&
+  return !!node&&node.label!=='?'&&
+    [...walk(root)].length<150&&
     branchDepth(node)+subtreeHeight(node)<35;
 }
 const textWidth=(str,font='20px Georgia')=>{textCtx.font=font;return textCtx.measureText(String(str)).width;};
