@@ -360,3 +360,36 @@
   color: #2a3b56;
   border-color: #b8d0f4;
 }
+
+/* Animated backup confirmation */
+.footer-info .backup-disk-icon {
+  width: 15px;
+  height: 15px;
+  margin-right: 6px;
+  vertical-align: -3px;
+  fill: none;
+  stroke: #4183c4;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transform-origin: center;
+  animation: backup-disk-spin 1.1s ease-out both;
+}
+
+@keyframes backup-disk-spin {
+  from {
+    transform: rotate(-360deg) scale(.85);
+    opacity: .4;
+  }
+  to {
+    transform: rotate(0deg) scale(1);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .footer-info .backup-disk-icon {
+    animation: none;
+  }
+}
+
