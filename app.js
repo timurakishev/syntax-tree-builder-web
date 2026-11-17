@@ -71,7 +71,7 @@ function showToast(message){
 }
 let infoTimer = null;
 
-function setInfo(text) {
+function setInfo(text,duration=7000) {
   const target = $('bottomInfo');
   if (!target) return;
 
@@ -81,7 +81,7 @@ function setInfo(text) {
   if (text) {
     infoTimer = setTimeout(() => {
       target.textContent = '';
-    }, 7000);
+    }, duration);
   }
 }
 function downloadFile(name,content,type){
@@ -349,6 +349,7 @@ function checkpoint(){undoStack.push(clone(root));if(undoStack.length>80)undoSta
 function afterEdit(){
   if(mode==='free')freeTree=clone(root);
   else if(sentences.length)workingTrees[currentIndex]=clone(root);
+  if(mode==='practice'&&sentences.length)backupNoticeRequested=true;
   render();
 }
 function undo(){if(!undoStack.length)return;redoStack.push(clone(root));root=normalizeNode(undoStack.pop());if(selectedUid&&!findNode(root,selectedUid))selectedUid=null;afterEdit();}
@@ -805,7 +806,9 @@ function duplicateExercise(){
   sentences.splice(insertAt,0,sentences[currentIndex]);exerciseIds.splice(insertAt,0,newLabel);
   workingTrees[insertAt]=clone(root);
   currentIndex=insertAt;root=normalizeNode(workingTrees[insertAt]);
-  selectedUid=null;undoStack=[];redoStack=[];scrollReset=true;render();
+  selectedUid=null;undoStack=[];redoStack=[];scrollReset=true;
+  backupNoticeRequested=true;
+  render();
 }
 
 async function deleteDuplicate(){
@@ -845,6 +848,7 @@ async function deleteDuplicate(){
   redoStack=[];
   scrollReset=true;
 
+  backupNoticeRequested=true;
   render();
 
   setInfo(`Deleted duplicate exercise ${label}`);
@@ -867,16 +871,43 @@ function workDocument(){
     trees:Object.fromEntries(Object.entries(workingTrees).map(([i,t])=>[String(i),clone(t)]))
   };
 }
+let lastSuccessfulBrowserBackup=null;
+let backupNoticeRequested=false;
+let backupNoticeTimer=null;
+let lastBackupNoticeAt=0;
+let backupFailureShown=false;
+
 function backupWorkInBrowser(){
   if(mode!=='practice'||!sentences.length)return;
 
   try{
-    localStorage.setItem(
-      'syntax-tree-builder-browser-backup-v1',
-      JSON.stringify(workDocument())
-    );
+    const content=JSON.stringify(workDocument());
+    if(content===lastSuccessfulBrowserBackup)return;
+
+    localStorage.setItem('syntax-tree-builder-browser-backup-v1',content);
+    lastSuccessfulBrowserBackup=content;
+    backupFailureShown=false;
+
+    if(!backupNoticeRequested)return;
+    backupNoticeRequested=false;
+    clearTimeout(backupNoticeTimer);
+
+    backupNoticeTimer=setTimeout(()=>{
+      if(mode!=='practice')return;
+      if(lastBackupNoticeAt&&Date.now()-lastBackupNoticeAt<20000)return;
+      if($('bottomInfo')?.textContent?.trim())return;
+
+      lastBackupNoticeAt=Date.now();
+      setInfo('✓ Backed up in this browser',3000);
+    },1800);
   }catch(error){
-    setInfo('Browser backup unavailable. Use Download Progress to keep your work.');
+    clearTimeout(backupNoticeTimer);
+    backupNoticeTimer=null;
+
+    if(!backupFailureShown){
+      backupFailureShown=true;
+      setInfo('Browser backup unavailable. Use Download Progress to keep your work.');
+    }
   }
 }
 async function restoreBrowserBackup(){
@@ -1370,7 +1401,10 @@ function startCommentDrag(event,group,info){
     undoStack.push(beforeDrag);
     if(undoStack.length>80)undoStack.shift();
     redoStack=[];
-    if(mode==='practice')workingTrees[currentIndex]=clone(root);else freeTree=clone(root);
+    if(mode==='practice'){
+      workingTrees[currentIndex]=clone(root);
+      backupNoticeRequested=true;
+    }else freeTree=clone(root);
     render();
   }
   function cancel(){group.removeEventListener('pointermove',move);group.removeEventListener('pointerup',done);group.removeEventListener('pointercancel',cancel);info.comment.x=original.x;info.comment.y=original.y;render();}
