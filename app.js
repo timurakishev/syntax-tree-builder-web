@@ -43,6 +43,26 @@ const ready=()=>mode==='free'||(mode==='practice'&&sentences.length>0);
 const currentNode=()=>selectedUid?findNode(root,selectedUid):null;
 const used=()=>usedWordIndices(root);
 const heading=x=>x==='EMPTY'?'Empty':x;
+function eligibleBranchParent(node){
+  return !!node&&node.word_index===null&&!node.null_element&&
+    node.triangle_text===null&&node.label!=='?'&&node.label!=='EMPTY'&&
+    (isPhrase(node.label)||isProjection(node.label));
+}
+
+function branchDepth(node){
+  let depth=0,cursor=node;
+  while(cursor&&cursor.uid!==root.uid){
+    cursor=findParent(root,cursor.uid);
+    if(!cursor)return Infinity;
+    depth++;
+  }
+  return depth;
+}
+
+function availableBranchRoom(node){
+  if(!eligibleBranchParent(node)||branchDepth(node)>=35)return 0;
+  return Math.max(0,Math.min(3-node.children.length,150-[...walk(root)].length));
+}
 const textWidth=(str,font='20px Georgia')=>{textCtx.font=font;return textCtx.measureText(String(str)).width;};
 
 function showToast(message){
@@ -293,9 +313,8 @@ function enabled(name){
   }
   
   if(name==='delete')return node.uid!==root.uid;
-  if(name==='branches')return node.word_index===null&&!node.null_element&&node.triangle_text===null&&
-    node.children.length<(isPhrase(node.label)?3:2)&&node.label!=='?'&&node.label!=='EMPTY'&&
-    (isPhrase(node.label)||isProjection(node.label));
+  if(name==='branches')return availableBranchRoom(node)>0||
+    (eligibleBranchParent(node)&&isPhrase(node.label)&&!node.children.length);
   if(name==='word')return !node.children.length&&(
     node.triangle_text!==null || (node.uid!==root.uid&&isHead(node.label)));
   return false;
@@ -337,19 +356,44 @@ function redo(){if(!redoStack.length)return;undoStack.push(clone(root));root=nor
 
 function addBranches(anchor){
   const node=currentNode();if(!node||!enabled('branches'))return;
-  const max=isPhrase(node.label)?3:2,room=max-node.children.length;
-  const choices=[];
-  for(let count=1;count<=room;count++){
-    const label=node.children.length+count===3&&node.label!=='TP'
-      ?`Add ${count} · coordination only`
-      :`Add ${count} daughter${count!==1?'s':''}`;
-    choices.push({label,action:()=>{
-      checkpoint();node.children.push(...Array.from({length:count},()=>makeNode('?')));afterEdit();
-    }});
-  }
-  if(isPhrase(node.label)&&!node.children.length){
-    choices.push({separator:true});
-    choices.push({label:'Add triangle',action:()=>editTriangle()});
+  const parentUid=node.uid,existing=node.children.length;
+  const room=availableBranchRoom(node);
+  const choices=[{group:`${heading(node.label)} · ${existing} daughter${existing===1?'':'s'}`}];
+  const coordinationNote=count=>count===3&&node.label!=='TP'?' · coordination only':'';
+
+  const insert=(index,count=1)=>{
+    const parent=findNode(root,parentUid);
+    if(!ready()||selectedUid!==parentUid||!parent||
+       parent.children.length!==existing||
+       availableBranchRoom(parent)<count||
+       index<0||index>parent.children.length)return;
+    checkpoint();
+    const added=Array.from({length:count},()=>makeNode('?'));
+    parent.children.splice(index,0,...added);
+    selectedUid=added[0].uid;
+    afterEdit();
+  };
+
+  if(existing===0){
+    for(let count=1;count<=room;count++){
+      choices.push({
+        label:`Add ${count} daughter${count===1?'':'s'}${coordinationNote(count)}`,
+        action:()=>insert(0,count)
+      });
+    }
+    if(isPhrase(node.label)){
+      choices.push({separator:true});
+      choices.push({label:'Add triangle',action:()=>{
+        if(selectedUid===parentUid)editTriangle();
+      }});
+    }
+  }else if(room>0){
+    const note=coordinationNote(existing+1);
+    choices.push({label:`Add daughter on left${note}`,action:()=>insert(0)});
+    if(existing===2){
+      choices.push({label:`Add daughter between${note}`,action:()=>insert(1)});
+    }
+    choices.push({label:`Add daughter on right${note}`,action:()=>insert(existing)});
   }
   showMenu(anchor,choices);
 }
