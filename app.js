@@ -365,14 +365,7 @@ function updateControls(){
   let hint;
   if(node.null_element)hint='Click Attach/Edit word to replace or remove Ø';
   else if(node.triangle_text!==null)hint='Click Attach/Edit word to edit or remove triangle';
-  else if(availableBranchRoom(node)>0)hint=node.children.length
-    ?'Use Expand tree to add a daughter':'Use Expand tree to add branches';
-  else if(eligibleBranchParent(node)&&isPhrase(node.label)&&!node.children.length)
-    hint='Use Expand tree to add a triangle';
-  else if(canInsertParentAbove(node)&&canRemoveParentAbove(node))
-    hint='Use Expand tree to insert or remove a parent';
-  else if(canInsertParentAbove(node))hint='Use Expand tree to insert a parent';
-  else if(canRemoveParentAbove(node))hint='Use Expand tree to remove a parent';
+  else if(enabled('branches'))hint='Use Expand tree to modify the branching structure';
   else hint='Double-click to change label';
   $('selectionText').textContent=`Selected: ${heading(node.label)}   ·   ${hint}`;
 }
