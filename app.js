@@ -76,6 +76,13 @@ function canInsertParentAbove(node){
     [...walk(root)].length<150&&
     branchDepth(node)+subtreeHeight(node)<35;
 }
+function canRemoveParentAbove(node){
+  if(!node)return false;
+  const parent=findParent(root,node.uid);
+  if(!parent||parent.children.length!==1)return false;
+  if(parent.uid===root.uid&&(!isPhrase(node.label)||node.label==='EMPTY'))return false;
+  return true;
+}
 const textWidth=(str,font='20px Georgia')=>{textCtx.font=font;return textCtx.measureText(String(str)).width;};
 
 function showToast(message){
@@ -338,7 +345,7 @@ function enabled(name){
   if(name==='delete')return node.uid!==root.uid;
   if(name==='branches')return availableBranchRoom(node)>0||
     (eligibleBranchParent(node)&&isPhrase(node.label)&&!node.children.length)||
-    canInsertParentAbove(node);
+    canInsertParentAbove(node)||canRemoveParentAbove(node);
   if(name==='word')return !node.children.length&&(
     node.triangle_text!==null || (node.uid!==root.uid&&isHead(node.label)));
   return false;
@@ -362,7 +369,10 @@ function updateControls(){
     ?'Use Expand tree to add a daughter':'Use Expand tree to add branches';
   else if(eligibleBranchParent(node)&&isPhrase(node.label)&&!node.children.length)
     hint='Use Expand tree to add a triangle';
+  else if(canInsertParentAbove(node)&&canRemoveParentAbove(node))
+    hint='Use Expand tree to insert or remove a parent';
   else if(canInsertParentAbove(node))hint='Use Expand tree to insert a parent';
+  else if(canRemoveParentAbove(node))hint='Use Expand tree to remove a parent';
   else hint='Double-click to change label';
   $('selectionText').textContent=`Selected: ${heading(node.label)}   ·   ${hint}`;
 }
@@ -429,11 +439,20 @@ function addBranches(anchor){
     }});
   }
 
-  if(canInsertParentAbove(node)){
+  const canInsert=canInsertParentAbove(node);
+  const canRemove=canRemoveParentAbove(node);
+  if(canInsert||canRemove){
     if(choices.length>1)choices.push({separator:true});
-    choices.push({label:'Insert parent above',action:()=>{
-      if(selectedUid===parentUid)insertParentAbove();
-    }});
+    if(canInsert){
+      choices.push({label:'Insert parent above',action:()=>{
+        if(selectedUid===parentUid)insertParentAbove();
+      }});
+    }
+    if(canRemove){
+      choices.push({label:'Remove parent above (unary only)',action:()=>{
+        if(selectedUid===parentUid)removeParentAbove();
+      }});
+    }
   }
   showMenu(anchor,choices);
 }
@@ -463,6 +482,29 @@ function insertParentAbove(){
   selectedUid=newParent.uid;
   afterEdit();
 }
+function removeParentAbove(){
+  const node=currentNode();
+  if(!ready()||!canRemoveParentAbove(node))return;
+
+  const parent=findParent(root,node.uid);
+  const grandparent=findParent(root,parent.uid);
+  const index=grandparent
+    ?grandparent.children.findIndex(child=>child.uid===parent.uid)
+    :-1;
+  if(grandparent&&index<0)return;
+
+  checkpoint();
+  node.comments=[...parent.comments,...node.comments];
+  if(grandparent){
+    grandparent.children[index]=node;
+  }else{
+    root=node;
+  }
+
+  selectedUid=node.uid;
+  afterEdit();
+}
+
 function changeLabel(anchor){
   const node=currentNode();if(!node||!ready())return;
   const allowed=new Set(allowedLabels(root,node));
