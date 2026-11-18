@@ -438,30 +438,6 @@ function addBranches(anchor){
   showMenu(anchor,choices);
 }
 
-  if(existing===0){
-    for(let count=1;count<=room;count++){
-      choices.push({
-        label:`Add ${count} daughter${count===1?'':'s'}${coordinationNote(count)}`,
-        action:()=>insert(0,count)
-      });
-    }
-    if(isPhrase(node.label)){
-      choices.push({separator:true});
-      choices.push({label:'Add triangle',action:()=>{
-        if(selectedUid===parentUid)editTriangle();
-      }});
-    }
-  }else if(room>0){
-    const note=coordinationNote(existing+1);
-    choices.push({label:`Add daughter on left${note}`,action:()=>insert(0)});
-    if(existing===2){
-      choices.push({label:`Add daughter between${note}`,action:()=>insert(1)});
-    }
-    choices.push({label:`Add daughter on right${note}`,action:()=>insert(existing)});
-  }
-  showMenu(anchor,choices);
-}
-
 function insertParentAbove(){
   const node=currentNode();
   if(!node||!enabled('parent'))return;
