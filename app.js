@@ -22,7 +22,7 @@ const iconPaths={
   redo:'<path d="m15 14 5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h2"/>'
 };
 const TOOL_CONFIG=[
-  ['branches','Add branches'],['parent','Insert parent above'],
+  ['branches','Expand tree'],
   ['label','Change label'],['word','Attach/Edit word'],
   ['features','Attach/Edit feature'],['comment','Add comment'],
   ['delete','Delete subtree'],['reset','Reset tree']
@@ -337,7 +337,8 @@ function enabled(name){
   if(name==='parent')return canInsertParentAbove(node);
   if(name==='delete')return node.uid!==root.uid;
   if(name==='branches')return availableBranchRoom(node)>0||
-    (eligibleBranchParent(node)&&isPhrase(node.label)&&!node.children.length);
+    (eligibleBranchParent(node)&&isPhrase(node.label)&&!node.children.length)||
+    canInsertParentAbove(node);
   if(name==='word')return !node.children.length&&(
     node.triangle_text!==null || (node.uid!==root.uid&&isHead(node.label)));
   return false;
@@ -357,7 +358,11 @@ function updateControls(){
   let hint;
   if(node.null_element)hint='Click Attach/Edit word to replace or remove Ø';
   else if(node.triangle_text!==null)hint='Click Attach/Edit word to edit or remove triangle';
-  else if(enabled('branches'))hint=node.children.length?'Add another daughter if needed':'Click Add branches to expand';
+  else if(availableBranchRoom(node)>0)hint=node.children.length
+    ?'Use Expand tree to add a daughter':'Use Expand tree to add branches';
+  else if(eligibleBranchParent(node)&&isPhrase(node.label)&&!node.children.length)
+    hint='Use Expand tree to add a triangle';
+  else if(canInsertParentAbove(node))hint='Use Expand tree to insert a parent';
   else hint='Double-click to change label';
   $('selectionText').textContent=`Selected: ${heading(node.label)}   ·   ${hint}`;
 }
@@ -378,6 +383,7 @@ function afterEdit(){
 function undo(){if(!undoStack.length)return;redoStack.push(clone(root));root=normalizeNode(undoStack.pop());if(selectedUid&&!findNode(root,selectedUid))selectedUid=null;afterEdit();}
 function redo(){if(!redoStack.length)return;undoStack.push(clone(root));root=normalizeNode(redoStack.pop());if(selectedUid&&!findNode(root,selectedUid))selectedUid=null;afterEdit();}
 
+
 function addBranches(anchor){
   const node=currentNode();if(!node||!enabled('branches'))return;
   const parentUid=node.uid,existing=node.children.length;
@@ -397,6 +403,40 @@ function addBranches(anchor){
     selectedUid=added[0].uid;
     afterEdit();
   };
+
+  if(room>0){
+    if(existing===0){
+      for(let count=1;count<=room;count++){
+        choices.push({
+          label:`Add ${count} daughter${count===1?'':'s'}${coordinationNote(count)}`,
+          action:()=>insert(0,count)
+        });
+      }
+    }else{
+      const note=coordinationNote(existing+1);
+      choices.push({label:`Add daughter on left${note}`,action:()=>insert(0)});
+      if(existing===2){
+        choices.push({label:`Add daughter between${note}`,action:()=>insert(1)});
+      }
+      choices.push({label:`Add daughter on right${note}`,action:()=>insert(existing)});
+    }
+  }
+
+  if(eligibleBranchParent(node)&&isPhrase(node.label)&&existing===0){
+    if(choices.length>1)choices.push({separator:true});
+    choices.push({label:'Add triangle',action:()=>{
+      if(selectedUid===parentUid)editTriangle();
+    }});
+  }
+
+  if(canInsertParentAbove(node)){
+    if(choices.length>1)choices.push({separator:true});
+    choices.push({label:'Insert parent above',action:()=>{
+      if(selectedUid===parentUid)insertParentAbove();
+    }});
+  }
+  showMenu(anchor,choices);
+}
 
   if(existing===0){
     for(let count=1;count<=room;count++){
