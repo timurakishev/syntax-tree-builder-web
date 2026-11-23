@@ -1390,7 +1390,26 @@ function buildComments(layout){
   });
   return entries;
 }
+function getTreePalette(){
+  // Theme colors are read only when the tree is drawn; SVG attributes
+  // then make the same colors work in the PNG export as on the screen.
+  const css=getComputedStyle(document.documentElement);
+  const get=(variable,fallback)=>css.getPropertyValue(variable).trim()||fallback;
+  return {
+    bg:get('--ui-canvas','#ffffff'),
+    ink:get('--tree-ink','#14233e'),
+    terminal:get('--tree-terminal','#24334d'),
+    edge:get('--tree-edge','#53647c'),
+    dots:get('--tree-dots','#e6ecf5'),
+    selection:get('--tree-selection','#1747ad'),
+    hover:get('--tree-hover','#9daabc'),
+    commentBg:get('--tree-comment-bg','#eaf2ff'),
+    commentBorder:get('--tree-comment-border','#a9c8ee'),
+    commentTitle:get('--tree-comment-title','#35639b')
+  };
+}
 function createTreeSvg(layout,comments){
+  const palette=getTreePalette();
   const svg=$('treeSvg');svg.replaceChildren();
   const maxRight=Math.max(layout.sceneW,...comments.map(c=>c.x+c.w+30));
   const maxBottom=Math.max(layout.sceneH,...comments.map(c=>c.y+c.h+30));
@@ -1405,12 +1424,12 @@ function createTreeSvg(layout,comments){
   stage.style.height=`${Math.max(sceneHeight*zoom,$('scrollCanvas').clientHeight)}px`;
   svg.style.margin='auto';
   const defs=svgEl('defs');const dots=svgEl('pattern',{id:'dots',width:24,height:24,patternUnits:'userSpaceOnUse'});
-  dots.append(svgEl('circle',{cx:0,cy:0,r:.75,fill:'#e6ecf5'}));defs.append(dots);svg.append(defs);
-  svg.append(svgEl('rect',{width:sceneWidth,height:sceneHeight,fill:BG}));
+  dots.append(svgEl('circle',{cx:0,cy:0,r:.75,fill:palette.dots}));defs.append(dots);svg.append(defs);
+  svg.append(svgEl('rect',{width:sceneWidth,height:sceneHeight,fill:palette.bg}));
   svg.append(svgEl('rect',{width:sceneWidth,height:sceneHeight,fill:'url(#dots)'}));
   const content=svgEl('g',{transform:`translate(${offsetX} ${offsetY})`});svg.append(content);
   for(const e of layout.edges){
-    content.append(svgEl('line',{x1:e.x1,y1:e.y1,x2:e.x2,y2:e.y2,stroke:EDGE,'stroke-width':2,'stroke-linecap':'round'}));
+    content.append(svgEl('line',{x1:e.x1,y1:e.y1,x2:e.x2,y2:e.y2,stroke:palette.edge,'stroke-width':2,'stroke-linecap':'round'}));
   }
   for(const n of walk(root)){
     const point=layout.points.get(n.uid),w=layout.labelWidths.get(n.uid);
@@ -1438,7 +1457,7 @@ function createTreeSvg(layout,comments){
     if(n.label==='EMPTY')group.append(svgEl('rect',{
       'class':'hover-frame',
       x:1,y:1,width:w-2,height:45,rx:10,
-      fill:'none',stroke:'#9daabc',
+      fill:'none',stroke:palette.hover,
       'stroke-width':1,
       'stroke-dasharray':'4 4',
       opacity:0
@@ -1452,7 +1471,7 @@ function createTreeSvg(layout,comments){
       height:45,
       rx:10,
       fill:'none',
-      stroke:'#1747ad',
+      stroke:palette.selection,
       'stroke-width':3,
       visibility:n.uid===selectedUid?'visible':'hidden'
     });
@@ -1462,7 +1481,8 @@ function createTreeSvg(layout,comments){
     if(n.label!=='EMPTY'){
       appendAnnotatedText(group,n.label,parts,w/2,24,{
         bold:true,
-        middle:true
+        middle:true,
+        color:palette.ink
       });
     }
     group.style.touchAction='manipulation';
@@ -1507,12 +1527,12 @@ function createTreeSvg(layout,comments){
   for(const t of layout.triangles){
     const half=Math.max(65,t.span/2-4),apex=t.y+48,base=t.y+97;
     content.append(svgEl('path',{d:`M${t.x} ${apex} L${t.x-half} ${base} L${t.x+half} ${base} Z`,
-      fill:'none',stroke:EDGE,'stroke-width':2,'stroke-linejoin':'round'}));
+      fill:'none',stroke:palette.edge,'stroke-width':2,'stroke-linejoin':'round'}));
     content.append(svgEl('text',{x:t.x,y:base+25,'text-anchor':'middle',
-      'font-family':'Georgia,serif','font-size':20,fill:'#24334d'},t.phrase));
+      'font-family':'Georgia,serif','font-size':20,fill:palette.terminal},t.phrase));
   }
   for(const t of layout.terminals){
-    appendAnnotatedText(content,t.text,t.parts,t.x,t.y+28,{color:'#24334d'});
+    appendAnnotatedText(content,t.text,t.parts,t.x,t.y+28,{color:palette.terminal});
     
     if(t.form){
       content.append(svgEl('text',{
@@ -1521,18 +1541,18 @@ function createTreeSvg(layout,comments){
         'text-anchor':'middle',
         'font-family':'Georgia,serif',
         'font-size':15,
-        fill:'#24334d'
+        fill:palette.terminal
       },t.form));
     }
   }
   for(const info of comments){
     const {comment,x,y,w,h,lines}=info;
     const group=svgEl('g',{'class':'comment-bubble',transform:`translate(${x} ${y})`,'data-comment':comment.id});
-    group.append(svgEl('rect',{width:w,height:h,rx:14,ry:14,fill:'#eaf2ff',stroke:'#a9c8ee','stroke-width':1.3}));
-    group.append(svgEl('text',{'class':'comment-head',x:14,y:21,'font-size':12,'font-family':'Segoe UI,Arial','font-weight':'600',fill:'#35639b'},'COMMENT'));
+    group.append(svgEl('rect',{width:w,height:h,rx:14,ry:14,fill:palette.commentBg,stroke:palette.commentBorder,'stroke-width':1.3}));
+    group.append(svgEl('text',{'class':'comment-head',x:14,y:21,'font-size':12,'font-family':'Segoe UI,Arial','font-weight':'600',fill:palette.commentTitle},'COMMENT'));
     lines.forEach((text,index)=>{
       group.append(svgEl('text',{'class':'comment-body',x:14,y:46+index*19,
-        'font-family':'Segoe UI,Arial','font-size':14.5,fill:INK},text));
+        'font-family':'Segoe UI,Arial','font-size':14.5,fill:palette.ink},text));
     });
     group.addEventListener('click',e=>e.stopPropagation());
     group.addEventListener('dblclick',e=>{e.stopPropagation();editComment(comment.id);});
@@ -1657,7 +1677,7 @@ async function exportPNG(){
       image.src=url;
     });
     const canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;
-    const ctx=canvas.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,w,h);
+    const ctx=canvas.getContext('2d');ctx.fillStyle=getTreePalette().bg;ctx.fillRect(0,0,w,h);
     ctx.drawImage(image,0,0,w,h);URL.revokeObjectURL(url);
     const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
     if(!blob)throw Error('Could not create PNG.');
@@ -1845,6 +1865,7 @@ function init(){
     const file=event.target.files[0];event.target.value='';if(file)await openProgress(file);
   };
   $('pngBtn').onclick=exportPNG;
+  document.addEventListener('syntax-tree-theme-change',()=>drawTree());
   $('overlay').addEventListener('click',event=>{
     if(event.target===$('overlay'))$('closeDialog').click();
   });

@@ -40,6 +40,8 @@
       }
 
       syncButton();
+      // The canvas is an SVG, so it must redraw its own theme colors.
+      document.dispatchEvent(new Event('syntax-tree-theme-change'));
     });
 
     syncButton();

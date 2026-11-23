@@ -1,7 +1,6 @@
 /* Syntax Tree Builder — theme layer.
-   Load AFTER styles.css; original editor rules and geometry remain untouched.
-   The SVG tree intentionally remains a white paper surface in both modes,
-   preserving its hard-coded ink, annotation colors, and PNG export. */
+   Load AFTER styles.css. The tree SVG and the surrounding canvas
+   share a background, and the renderer follows the active theme. */
 
 html[data-theme] {
   color-scheme: light;
@@ -173,8 +172,7 @@ button.tiny:disabled, button.icon-only:disabled {
   border-color: var(--ui-disabled-border);
 }
 
-/* Drawing area: leave #treeSvg itself white with its original dark labels.
-   A dark surrounding workbench makes the paper legible in dark mode. */
+/* Drawing area: one continuous surface, with no white SVG island. */
 .workspace { background: var(--ui-panel); }
 .sentencebar {
   background: var(--ui-panel);
@@ -192,8 +190,18 @@ button.tiny:disabled, button.icon-only:disabled {
   background: var(--ui-scroll-thumb);
 }
 svg.tree {
-  background: #ffffff;
-  box-shadow: 0 0 0 1px var(--ui-paper-border);
+  background: transparent;
+  box-shadow: none;
+}
+/* Override the original hard-coded SVG class colors, including during
+   selection and when hovering over draggable comment bubbles. */
+#treeSvg .tree-node .selection-frame { stroke: var(--tree-selection); }
+#treeSvg .tree-node .hover-frame { stroke: var(--tree-hover); }
+#treeSvg .comment-body { fill: var(--tree-ink); }
+#treeSvg .comment-head { fill: var(--tree-comment-title); }
+#treeSvg .comment-bubble:hover rect {
+  fill: var(--tree-comment-hover);
+  stroke: var(--tree-comment-border);
 }
 .placeholder {
   background: var(--ui-canvas);
