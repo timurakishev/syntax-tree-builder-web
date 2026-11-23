@@ -319,3 +319,31 @@ header.studio-header .header-actions button:not(#themeToggle) {
   }
 }
 
+/* Editing & View — compact controls beneath Tree Tools. */
+.sidebar.right .edit-view-heading {
+  margin-top: 26px;
+  margin-bottom: 12px;
+}
+
+.edit-view-buttons {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.edit-view-buttons button {
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  width: 100%;
+  height: 42px;
+  padding: 0;
+}
+
+.edit-view-buttons svg {
+  width: 20px;
+  height: 20px;
+  stroke: currentColor;
+}
+
+
