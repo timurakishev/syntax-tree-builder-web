@@ -304,3 +304,18 @@ header.studio-header .header-actions #themeToggle:hover:not(:disabled) {
   }
 }
 
+/* Studio Control Bar — larger command text */
+header.studio-header .studio-modes .mode-tab,
+header.studio-header #instructionsBtn,
+header.studio-header .header-actions button:not(#themeToggle) {
+  font-size: 14px;
+}
+
+@media (max-width: 1150px) {
+  header.studio-header .studio-modes .mode-tab,
+  header.studio-header #instructionsBtn,
+  header.studio-header .header-actions button:not(#themeToggle) {
+    font-size: 13px;
+  }
+}
+
