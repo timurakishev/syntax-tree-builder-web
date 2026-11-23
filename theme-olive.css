@@ -119,3 +119,188 @@
 .brand { font-size: 21px; font-weight: 765; letter-spacing: -.55px; }
 .side-heading { font-size: 11px; letter-spacing: .13em; font-weight: 770; }
 .tool { font-weight: 640; }
+
+/* Studio Control Bar — Option 2 (single row in both modes).
+   This changes only header presentation; the sentence bar remains
+   a second row when Practice/Exam Mode is active. */
+header.studio-header {
+  height: 66px;
+  min-height: 66px;
+  flex: none;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 10px;
+  padding: 0 22px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+}
+
+header.studio-header .studio-brand {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 10px;
+  white-space: nowrap;
+}
+
+header.studio-header .studio-header-divider {
+  flex: 0 0 1px;
+  height: 28px;
+  background: var(--ui-divider);
+  margin: 0 5px;
+}
+
+header.studio-header .studio-modes {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--ui-outline);
+  border-radius: 10px;
+  background: var(--ui-top);
+}
+
+header.studio-header .studio-modes .mode-tab {
+  flex: none;
+  height: 36px;
+  padding: 0 13px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ui-header-text);
+  font-size: 13px;
+  font-weight: 650;
+  white-space: nowrap;
+  box-shadow: none;
+}
+
+header.studio-header .studio-modes .mode-tab:hover:not(:disabled) {
+  background: var(--ui-header-button-hover);
+  color: var(--ui-header-text);
+}
+
+header.studio-header .studio-modes .mode-tab.active,
+header.studio-header .studio-modes .mode-tab.active:hover:not(:disabled) {
+  background: var(--ui-button);
+  color: var(--ui-text);
+  border-color: var(--ui-outline);
+  font-weight: 760;
+  box-shadow: 0 1px 3px #00000012;
+}
+
+header.studio-header #instructionsBtn {
+  flex: none;
+  height: 42px;
+  padding: 0 13px;
+  background: var(--ui-header-button);
+  color: var(--ui-header-text);
+  border-color: var(--ui-header-border);
+  font-weight: 630;
+  white-space: nowrap;
+}
+
+header.studio-header #instructionsBtn:hover:not(:disabled) {
+  background: var(--ui-header-button-hover);
+}
+
+header.studio-header .flex-spacer {
+  min-width: 5px;
+}
+
+header.studio-header .header-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  overflow: visible;
+  max-width: none;
+  margin-left: auto;
+}
+
+header.studio-header .header-actions button:not(#themeToggle) {
+  flex: none;
+  height: 40px;
+  padding: 0 11px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--ui-header-text);
+  font-size: 13px;
+  font-weight: 630;
+  white-space: nowrap;
+}
+
+header.studio-header .header-actions button:not(#themeToggle):hover:not(:disabled) {
+  background: var(--ui-header-button-hover);
+  border-color: transparent;
+}
+
+/* Keep the existing accessible text, aria-label, and JS toggle;
+   show only the moon/sun icon, like the Studio mockup. */
+header.studio-header .header-actions #themeToggle {
+  flex: 0 0 42px;
+  width: 42px;
+  min-width: 42px;
+  height: 42px;
+  padding: 0;
+  font-size: 0;
+  line-height: 1;
+  background: var(--ui-header-button);
+  border-color: var(--ui-header-border);
+}
+
+header.studio-header .header-actions #themeToggle::before {
+  content: '☾';
+  font-size: 23px;
+  font-weight: 500;
+  color: var(--ui-header-text);
+}
+
+:root[data-theme="dark"] header.studio-header .header-actions #themeToggle::before {
+  content: '☀';
+}
+
+header.studio-header .header-actions #themeToggle:hover:not(:disabled) {
+  background: var(--ui-header-button-hover);
+}
+
+@media (max-width: 1150px) {
+  header.studio-header {
+    padding: 0 13px;
+    gap: 7px;
+  }
+
+  header.studio-header .brand {
+    font-size: 18px;
+  }
+
+  header.studio-header .studio-header-divider {
+    margin: 0 2px;
+  }
+
+  header.studio-header .studio-modes .mode-tab,
+  header.studio-header .header-actions button:not(#themeToggle) {
+    font-size: 12px;
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+
+  header.studio-header #instructionsBtn {
+    font-size: 12px;
+    padding: 0 9px;
+  }
+}
+
+@media (max-width: 880px) {
+  /* Remain one row: allow horizontal scrolling instead of wrapping. */
+  header.studio-header {
+    height: 62px;
+    min-height: 62px;
+    flex-wrap: nowrap;
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+}
+
