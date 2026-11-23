@@ -1,0 +1,121 @@
+/* Olive / Fieldnotes — Syntax Tree Builder skin. Load after theme-core.css. */
+/* No layout, editor logic, or SVG geometry changes. */
+:root {
+  --ui-page: #eae9df;
+  --ui-text: #232922;
+  --ui-heading: #283127;
+  --ui-muted: #636e5e;
+  --ui-header: #fbfaf4;
+  --ui-header-text: #26302a;
+  --ui-header-button: #f3f3e9;
+  --ui-header-button-hover: #e8eadb;
+  --ui-header-border: #c9cec0;
+  --ui-top: #f2f1e9;
+  --ui-side: #eff0e8;
+  --ui-panel: #fdfdf8;
+  --ui-canvas: #fdfdf8;
+  --tree-ink: #263027;
+  --tree-terminal: #293429;
+  --tree-edge: #5b675c;
+  --tree-dots: #eceee7;
+  --tree-selection: #557146;
+  --tree-hover: #96a98d;
+  --tree-comment-bg: #eaf2dd;
+  --tree-comment-border: #a9bb8a;
+  --tree-comment-title: #53693b;
+  --tree-comment-hover: #dcebc7;
+  --ui-outline: #c2c8b8;
+  --ui-border-strong: #7a8a74;
+  --ui-border-size: 1px;
+  --ui-divider: #c6cabe;
+  --ui-button: #fffefa;
+  --ui-button-hover: #eef2e7;
+  --ui-button-active: #dbe6cf;
+  --ui-button-shadow: none;
+  --ui-disabled-bg: #ecede6;
+  --ui-disabled-text: #7d887c;
+  --ui-disabled-border: #dadfd3;
+  --ui-primary-bg: #d6e8b0;
+  --ui-primary-hover: #bfda91;
+  --ui-primary-text: #23351b;
+  --ui-primary-border: #a7bc83;
+  --ui-input: #fffefa;
+  --ui-popover: #fffefa;
+  --ui-floating: #fffefa;
+  --ui-paper-border: #cbd0c5;
+  --ui-scroll-thumb: #b2baae;
+  --ui-focus: #4e733e;
+  --ui-focus-soft: #4e733e33;
+  --ui-overlay: #111c1591;
+  --ui-danger: #a63e38;
+  --ui-danger-outline: #dab2a9;
+  --ui-toast-bg: #243328;
+  --ui-toast-text: #f8fff0;
+  --ui-menu-shadow: 0 14px 40px #25362325;
+  --ui-dialog-shadow: 0 24px 60px #25362339;
+  --ui-floating-shadow: 0 10px 30px #25362322;
+  --ui-radius: 7px;
+  --ui-floating-radius: 11px;
+  --ui-pop-radius: 9px;
+  --ui-dialog-radius: 13px;
+}
+
+:root[data-theme="dark"] {
+  --ui-page: #111914;
+  --ui-text: #f2f4e9;
+  --ui-heading: #f1f5e8;
+  --ui-muted: #bdc9b5;
+  --ui-header: #18231a;
+  --ui-header-text: #f1f5eb;
+  --ui-header-button: #28372b;
+  --ui-header-button-hover: #3c503e;
+  --ui-header-border: #526b55;
+  --ui-top: #1c2a20;
+  --ui-side: #1e2d22;
+  --ui-panel: #1c2920;
+  --ui-canvas: #1c2920;
+  --tree-ink: #f0f5e8;
+  --tree-terminal: #e9efdf;
+  --tree-edge: #b0c5ad;
+  --tree-dots: #28382c;
+  --tree-selection: #bfdf8d;
+  --tree-hover: #92ad8f;
+  --tree-comment-bg: #2e4330;
+  --tree-comment-border: #789976;
+  --tree-comment-title: #c7e4a9;
+  --tree-comment-hover: #39573d;
+  --ui-outline: #506653;
+  --ui-border-strong: #98ab95;
+  --ui-divider: #526954;
+  --ui-button: #2c3d30;
+  --ui-button-hover: #405641;
+  --ui-button-active: #4b624c;
+  --ui-disabled-bg: #25352a;
+  --ui-disabled-text: #94a397;
+  --ui-disabled-border: #3a4b3d;
+  --ui-primary-bg: #bddb8c;
+  --ui-primary-hover: #d5eeab;
+  --ui-primary-text: #1c321d;
+  --ui-primary-border: #d0e7a9;
+  --ui-input: #26392b;
+  --ui-popover: #25372a;
+  --ui-floating: #26382b;
+  --ui-paper-border: #657965;
+  --ui-scroll-thumb: #6a806d;
+  --ui-focus: #c6e49a;
+  --ui-focus-soft: #c6e49a38;
+  --ui-overlay: #030804cd;
+  --ui-danger: #ffc0b3;
+  --ui-danger-outline: #9e7066;
+  --ui-toast-bg: #cae5a1;
+  --ui-toast-text: #1b311f;
+  --ui-menu-shadow: 0 14px 44px #030b05a8;
+  --ui-dialog-shadow: 0 25px 72px #030b05d2;
+  --ui-floating-shadow: 0 11px 34px #030b05a1;
+  --ui-button-shadow: none;
+}
+
+/* Typographic treatment unique to Olive / Fieldnotes. */
+.brand { font-size: 21px; font-weight: 765; letter-spacing: -.55px; }
+.side-heading { font-size: 11px; letter-spacing: .13em; font-weight: 770; }
+.tool { font-weight: 640; }
