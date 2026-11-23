@@ -357,6 +357,10 @@ function updateControls(){
   }
   $('floatingUndo').disabled=!ready()||!undoStack.length;
   $('floatingRedo').disabled=!ready()||!redoStack.length;
+  $('sidebarUndo').disabled=$('floatingUndo').disabled;
+  $('sidebarRedo').disabled=$('floatingRedo').disabled;
+  $('sidebarZoomOut').disabled=!ready();
+  $('sidebarZoomIn').disabled=!ready();
   $('pngBtn').disabled=!ready();
   $('prevBtn').disabled=mode!=='practice'||!sentences.length||currentIndex<=0;
   $('nextBtn').disabled=mode!=='practice'||!sentences.length||currentIndex>=sentences.length-1;
@@ -1837,6 +1841,10 @@ function init(){
   $('leftToggle').onclick=()=>{leftCollapsed=!leftCollapsed;render();};
   $('rightToggle').onclick=()=>{rightCollapsed=!rightCollapsed;render();};
   $('zoomIn').onclick=()=>changeZoom(1.15);$('zoomOut').onclick=()=>changeZoom(1/1.15);
+  $('sidebarUndo').onclick=undo;
+  $('sidebarRedo').onclick=redo;
+  $('sidebarZoomOut').onclick=()=>changeZoom(1/1.15);
+  $('sidebarZoomIn').onclick=()=>changeZoom(1.15);
   $('prevBtn').onclick=()=>switchExercise(currentIndex-1);
   $('nextBtn').onclick=saveAndNext;
   $('duplicateBtn').onclick=duplicateExercise;
