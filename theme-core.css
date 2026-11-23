@@ -1,0 +1,350 @@
+/* Syntax Tree Builder — theme layer.
+   Load AFTER styles.css; original editor rules and geometry remain untouched.
+   The SVG tree intentionally remains a white paper surface in both modes,
+   preserving its hard-coded ink, annotation colors, and PNG export. */
+
+html[data-theme] {
+  color-scheme: light;
+  --ui-shadow: none;
+}
+html[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+body, #app {
+  background: var(--ui-page);
+  color: var(--ui-text);
+}
+
+/* All controls, including the generated sidebar tools. */
+button {
+  background: var(--ui-button);
+  color: var(--ui-text);
+  border: var(--ui-border-size) solid var(--ui-outline);
+  border-radius: var(--ui-radius);
+  box-shadow: var(--ui-button-shadow);
+  transition: background-color .14s, border-color .14s, box-shadow .14s,
+              color .14s, transform .14s;
+}
+button:hover:not(:disabled) {
+  background: var(--ui-button-hover);
+  color: var(--ui-text);
+  border-color: var(--ui-border-strong);
+}
+button:active:not(:disabled) {
+  background: var(--ui-button-active);
+  box-shadow: none;
+  transform: translateY(1px);
+}
+button:disabled,
+button.primary-soft:disabled {
+  background: var(--ui-disabled-bg);
+  color: var(--ui-disabled-text);
+  border-color: var(--ui-disabled-border);
+  box-shadow: none;
+  opacity: 1;
+}
+button:focus-visible,
+[role="button"]:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid var(--ui-focus);
+  outline-offset: 2px;
+}
+button.primary-soft,
+.tool.primary-soft:not(:disabled) {
+  background: var(--ui-primary-bg);
+  color: var(--ui-primary-text);
+  border-color: var(--ui-primary-border);
+}
+button.primary-soft:hover:not(:disabled),
+.tool.primary-soft:hover:not(:disabled) {
+  background: var(--ui-primary-hover);
+  color: var(--ui-primary-text);
+  border-color: var(--ui-primary-border);
+}
+
+/* Header, top actions, and mode selector. */
+header {
+  background: var(--ui-header);
+  border-bottom: var(--ui-border-size) solid var(--ui-outline);
+}
+.brand {
+  color: var(--ui-header-text);
+  font-weight: 750;
+  letter-spacing: -.5px;
+}
+.header-actions button {
+  color: var(--ui-header-text);
+  background: var(--ui-header-button);
+  border-color: var(--ui-header-border);
+}
+.header-actions button:hover:not(:disabled) {
+  color: var(--ui-header-text);
+  background: var(--ui-header-button-hover);
+  border-color: var(--ui-header-border);
+}
+#themeToggle {
+  min-width: 116px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+button.tiny, button.icon-only {
+  color: var(--ui-text);
+}
+button.tiny:disabled, button.icon-only:disabled {
+  color: var(--ui-disabled-text);
+}
+.modebar {
+  background: var(--ui-top);
+  border-bottom: var(--ui-border-size) solid var(--ui-outline);
+}
+.mode-tab.active {
+  background: var(--ui-primary-bg);
+  color: var(--ui-primary-text);
+  border-color: var(--ui-primary-border);
+}
+.mode-tab.active:hover:not(:disabled) {
+  background: var(--ui-primary-hover);
+  color: var(--ui-primary-text);
+  border-color: var(--ui-primary-border);
+}
+.mode-descr { color: var(--ui-muted); }
+
+/* Sidebars and progress/navigation information. */
+.sidebar { background: var(--ui-side); }
+.sidebar.left { border-right: var(--ui-border-size) solid var(--ui-outline); }
+.sidebar.right { border-left: var(--ui-border-size) solid var(--ui-outline); }
+.side-heading, .jump label {
+  color: var(--ui-heading);
+}
+.muted, .progress-lines, .jump #jumpTotal {
+  color: var(--ui-muted);
+}
+.tool:not(:disabled) .tool-icon,
+.float-btn:not(:disabled) {
+  color: var(--ui-text);
+}
+.tool.primary-soft:not(:disabled) .tool-icon,
+.float-btn.float-branches:not(:disabled) {
+  color: var(--ui-primary-text);
+}
+.tool:disabled .tool-icon,
+.tool:disabled svg,
+.float-btn:disabled,
+.float-btn:disabled svg {
+  color: var(--ui-disabled-text);
+  stroke: currentColor;
+}
+#deleteDuplicateBtn:not(:disabled) {
+  color: var(--ui-danger);
+  border-color: var(--ui-danger-outline);
+}
+
+/* Original stylesheet contains high-specificity worksheet overrides. */
+#importBtn, #prevBtn, #nextBtn, #jumpBtn {
+  color: var(--ui-text);
+  background: var(--ui-button);
+  border-color: var(--ui-outline);
+}
+#importBtn:hover:not(:disabled),
+#prevBtn:hover:not(:disabled),
+#nextBtn:hover:not(:disabled),
+#jumpBtn:hover:not(:disabled) {
+  color: var(--ui-text);
+  background: var(--ui-button-hover);
+  border-color: var(--ui-border-strong);
+}
+#importBtn:active:not(:disabled),
+#prevBtn:active:not(:disabled),
+#nextBtn:active:not(:disabled),
+#jumpBtn:active:not(:disabled) {
+  color: var(--ui-text);
+  background: var(--ui-button-active);
+  border-color: var(--ui-border-strong);
+}
+#importBtn:disabled,
+#prevBtn:disabled,
+#nextBtn:disabled,
+#jumpBtn:disabled {
+  color: var(--ui-disabled-text);
+  background: var(--ui-disabled-bg);
+  border-color: var(--ui-disabled-border);
+}
+
+/* Drawing area: leave #treeSvg itself white with its original dark labels.
+   A dark surrounding workbench makes the paper legible in dark mode. */
+.workspace { background: var(--ui-panel); }
+.sentencebar {
+  background: var(--ui-panel);
+  border-color: var(--ui-outline);
+}
+.sentencebar strong { color: var(--ui-muted); }
+.sentencebar span { color: var(--ui-text); }
+.drawing-area, .drawing-area .scroll-canvas {
+  background: var(--ui-canvas);
+}
+.drawing-area .scroll-canvas {
+  scrollbar-color: var(--ui-scroll-thumb) var(--ui-canvas);
+}
+.scroll-canvas::-webkit-scrollbar-thumb {
+  background: var(--ui-scroll-thumb);
+}
+svg.tree {
+  background: #ffffff;
+  box-shadow: 0 0 0 1px var(--ui-paper-border);
+}
+.placeholder {
+  background: var(--ui-canvas);
+  color: var(--ui-muted);
+}
+
+/* Draggable floating toolbar and vertical separators. */
+.floatingbar {
+  background: var(--ui-floating);
+  border: var(--ui-border-size) solid var(--ui-outline);
+  border-radius: var(--ui-floating-radius);
+  box-shadow: var(--ui-floating-shadow);
+}
+.float-grip { color: var(--ui-muted); }
+.float-btn {
+  border: 0;
+  background: transparent;
+  color: var(--ui-text);
+  box-shadow: none;
+  border-radius: var(--ui-radius);
+}
+.float-btn:hover:not(:disabled) {
+  background: var(--ui-button-hover);
+  color: var(--ui-text);
+  border: 0;
+}
+.float-btn:disabled {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  color: var(--ui-disabled-text);
+}
+.float-zoom, .float-zoomgroup .float-btn { color: var(--ui-text); }
+.float-btn.float-branches:not(:disabled) {
+  background: var(--ui-primary-bg);
+  color: var(--ui-primary-text);
+}
+.float-btn.float-branches:hover:not(:disabled) {
+  background: var(--ui-primary-hover);
+  color: var(--ui-primary-text);
+}
+.floating-toggle, .sidebar-floating-toggle {
+  color: var(--ui-primary-text);
+  background: var(--ui-primary-bg);
+  border-color: var(--ui-primary-border);
+}
+.floating-toggle.inactive {
+  color: var(--ui-text);
+  background: var(--ui-button);
+  border-color: var(--ui-outline);
+}
+.float-separator, .footer-divider {
+  background: var(--ui-divider);
+}
+
+/* Selection and backup status. */
+.footer {
+  background: var(--ui-panel);
+  border-top: var(--ui-border-size) solid var(--ui-outline);
+}
+.footer-selection, .footer-info, .selection-note {
+  color: var(--ui-muted);
+}
+.footer-info .backup-disk-icon { stroke: var(--ui-focus); }
+.selection-note { border-top-color: var(--ui-outline); }
+
+/* Menus, submenus, and dialogs are outside #app. */
+.context-menu {
+  color: var(--ui-text);
+  background: var(--ui-popover);
+  border: var(--ui-border-size) solid var(--ui-outline);
+  border-radius: var(--ui-pop-radius);
+  box-shadow: var(--ui-menu-shadow);
+}
+.context-menu button {
+  color: var(--ui-text);
+  background: var(--ui-popover);
+  box-shadow: none;
+  border: 0;
+  border-radius: var(--ui-radius);
+}
+.context-menu button:hover:not(:disabled) {
+  color: var(--ui-text);
+  background: var(--ui-button-hover);
+}
+.context-menu button.active {
+  color: var(--ui-primary-text);
+  background: var(--ui-primary-bg);
+}
+.context-menu button:disabled {
+  color: var(--ui-disabled-text);
+  background: transparent;
+}
+.context-menu .group-label,
+.context-menu .has-submenu span:last-child { color: var(--ui-muted); }
+.context-menu hr { border-top-color: var(--ui-divider); }
+.overlay { background: var(--ui-overlay); }
+.dialog {
+  color: var(--ui-text);
+  background: var(--ui-popover);
+  border: var(--ui-border-size) solid var(--ui-outline);
+  border-radius: var(--ui-dialog-radius);
+  box-shadow: var(--ui-dialog-shadow);
+}
+.dialog-header { border-bottom: 1px solid var(--ui-divider); }
+.dialog-header button {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  color: var(--ui-muted);
+}
+.dialog-body p, .dialog-note, .dialog-body .count,
+.dialog-body .group-label { color: var(--ui-muted); }
+.dialog-body .field-label, .dialog-group b { color: var(--ui-heading); }
+.dialog-body input, .dialog-body textarea,
+.dialog-body select, .jump input {
+  color: var(--ui-text);
+  background: var(--ui-input);
+  border: var(--ui-border-size) solid var(--ui-outline);
+  border-radius: var(--ui-radius);
+  box-shadow: none;
+  caret-color: var(--ui-text);
+}
+input::placeholder, textarea::placeholder { color: var(--ui-muted); }
+.dialog-body input:focus, .dialog-body textarea:focus,
+.dialog-body select:focus, .jump input:focus {
+  border-color: var(--ui-focus);
+  box-shadow: 0 0 0 2px var(--ui-focus-soft);
+}
+.dialog-footer button.primary:not(:disabled) {
+  color: var(--ui-primary-text);
+  background: var(--ui-primary-bg);
+  border-color: var(--ui-primary-border);
+}
+.dialog-footer button.primary:hover:not(:disabled) {
+  color: var(--ui-primary-text);
+  background: var(--ui-primary-hover);
+  border-color: var(--ui-primary-border);
+}
+.dialog-footer button.primary:active:not(:disabled) {
+  color: var(--ui-primary-text);
+  background: var(--ui-primary-hover);
+  border-color: var(--ui-primary-border);
+}
+.toast {
+  color: var(--ui-toast-text);
+  background: var(--ui-toast-bg);
+  border: 1px solid var(--ui-outline);
+  box-shadow: var(--ui-menu-shadow);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button { transition: none; transform: none !important; }
+}
