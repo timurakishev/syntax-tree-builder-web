@@ -8,7 +8,7 @@ import {readExercisesXlsx} from './xlsx.js';
 const $=id=>document.getElementById(id);
 const NS='http://www.w3.org/2000/svg';
 const BG='#ffffff', INK='#14233e', EDGE='#53647c';
-const TOP=95, SIDE=105, V_GAP=124, H_GAP=24;
+const TOP=82, SIDE=105, V_GAP=108, H_GAP=18;
 const iconPaths={
   branches:'<circle cx="6" cy="5" r="2"/><circle cx="18" cy="5" r="2"/><circle cx="12" cy="19" r="2"/><path d="M6 7v3a6 6 0 0 0 6 6v1M18 7v3a6 6 0 0 1-6 6"/>',
   parent:'<circle cx="12" cy="4" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="20" r="2"/><path d="M12 6v4M12 14v4"/>',
@@ -1177,73 +1177,137 @@ function formAnnotationWidth(node){
   const form=String(node.form_feature??'').trim();
   return form?textWidth(form,'15px Georgia')+34:0;
 }
+
 function layoutTree(){
-  const widths=new Map(),labelWidths=new Map(),points=new Map(),terminals=[],triangles=[],edges=[];
-  const text=words();let maxDepth=0;
-  function measure(node,depth=0){
+  const labelWidths=new Map(),points=new Map();
+  const terminals=[],triangles=[],edges=[];
+  const text=words();
+
+  // A contour records how far a subtree extends at each depth.
+  // Unlike a single bounding width, it lets shallow sisters stay close
+  // even when one sister contains a large, deeply branching subtree.
+  function build(node,depth=0){
     if(depth>35)throw Error('Tree is too deep to display.');
-    const lw=widthForLabel(node.label,labelSubscripts(node),true);labelWidths.set(node.uid,lw);
-    let width=lw;
+
+    const labelWidth=widthForLabel(node.label,labelSubscripts(node),true);
+    labelWidths.set(node.uid,labelWidth);
+    const contours=[{left:-labelWidth/2,right:labelWidth/2}];
+    const positions=new Map([[node.uid,{x:0,depth:0}]]);
+
     if(node.children.length){
-      width=Math.max(lw,node.children.reduce((sum,c)=>sum+measure(c,depth+1),0)+H_GAP*(node.children.length-1));
-    }else if(node.triangle_text!==null){
-      width=Math.max(lw,textWidth(node.triangle_text,'20px Georgia')+34,125);
-    }else if(node.null_element){
-      width=Math.max(
-        lw,
-        widthForLabel('Ø',lexicalSubscripts(node)),
-        formAnnotationWidth(node)
-      );
-    }else if(node.word_index!==null&&node.word_index>=0&&node.word_index<text.length){
-      width=Math.max(
-        lw,
-        widthForLabel(text[node.word_index],lexicalSubscripts(node)),
-        formAnnotationWidth(node)
-      );
-    }
-    widths.set(node.uid,width);return width;
-  }
-  function assign(node,left,depth){
-    maxDepth=Math.max(maxDepth,depth);
-    const mid=left+widths.get(node.uid)/2,y=TOP+depth*V_GAP;
-    points.set(node.uid,{x:mid,y});
-    if(node.children.length){
-      const span=node.children.reduce((sum,c)=>sum+widths.get(c.uid),0)+H_GAP*(node.children.length-1);
-      let x=mid-span/2;
-      for(const child of node.children){
-        assign(child,x,depth+1);const p=points.get(child.uid);
-        edges.push({x1:mid,y1:y+47,x2:p.x,y2:p.y});
-        x+=widths.get(child.uid)+H_GAP;
+      const children=node.children.map(child=>build(child,depth+1));
+      const combined=[];
+      const offsets=[];
+
+      for(const child of children){
+        let offset=0;
+        for(let level=0;level<child.contours.length;level++){
+          const earlier=combined[level],current=child.contours[level];
+          if(earlier&&current){
+            offset=Math.max(offset,earlier.right+H_GAP-current.left);
+          }
+        }
+        offsets.push(offset);
+        child.contours.forEach((bounds,level)=>{
+          const left=bounds.left+offset,right=bounds.right+offset;
+          if(!combined[level])combined[level]={left,right};
+          else{
+            combined[level].left=Math.min(combined[level].left,left);
+            combined[level].right=Math.max(combined[level].right,right);
+          }
+        });
       }
+
+      // Center the mother over its immediate daughters, NOT over every
+      // terminal dominated by those daughters. Unary edges stay vertical.
+      const center=offsets.length===1
+        ?offsets[0]:(offsets[0]+offsets[offsets.length-1])/2;
+
+      children.forEach((child,index)=>{
+        const shift=offsets[index]-center;
+        for(const [id,p] of child.positions){
+          positions.set(id,{x:p.x+shift,depth:p.depth+1});
+        }
+      });
+      combined.forEach((bounds,level)=>{
+        contours[level+1]={
+          left:bounds.left-center,
+          right:bounds.right-center
+        };
+      });
     }else if(node.triangle_text!==null){
-      triangles.push({phrase:node.triangle_text,x:mid,y,span:widths.get(node.uid)});
-      maxDepth=Math.max(maxDepth,depth+1);
-    }else if(node.null_element){
-      terminals.push({
-        text:'Ø',
-        parts:lexicalSubscripts(node),
-        form:String(node.form_feature??'').trim(),
-        x:mid,
-        y:y+39
+      const span=Math.max(labelWidth,textWidth(node.triangle_text,'20px Georgia')+34,125);
+      const half=Math.max(65,span/2-4);
+      contours[1]={left:-half-8,right:half+8};
+    }else{
+      const terminal=node.null_element?'Ø':
+        node.word_index!==null&&node.word_index>=0&&node.word_index<text.length
+          ?text[node.word_index]:null;
+
+      if(terminal!==null){
+        const parts=lexicalSubscripts(node);
+        const main=textWidth(terminal,'20px Georgia');
+        const suffix=annotatedWidth(terminal,parts)-main;
+        const form=String(node.form_feature??'').trim();
+        const formHalf=form?textWidth(form,'15px Georgia')/2:0;
+        contours[1]={
+          left:-Math.max(38,main/2+12,formHalf+12),
+          right:Math.max(38,main/2+suffix+12,formHalf+12)
+        };
+      }
+    }
+
+    return {contours,positions};
+  }
+
+  const tree=build(root);
+  const left=Math.min(...tree.contours.filter(Boolean).map(bounds=>bounds.left));
+  const right=Math.max(...tree.contours.filter(Boolean).map(bounds=>bounds.right));
+  const width=right-left;
+  const sceneW=Math.max(900,width+2*SIDE);
+  const shiftX=(sceneW-width)/2-left;
+  let maxDepth=0;
+
+  for(const node of walk(root)){
+    const position=tree.positions.get(node.uid);
+    const x=position.x+shiftX;
+    const y=TOP+position.depth*V_GAP;
+    points.set(node.uid,{x,y});
+    maxDepth=Math.max(maxDepth,position.depth);
+
+    for(const child of node.children){
+      const p=tree.positions.get(child.uid);
+      edges.push({
+        x1:x,y1:y+47,
+        x2:p.x+shiftX,y2:TOP+p.depth*V_GAP
       });
-      maxDepth=Math.max(maxDepth,depth+1);
-    }else if(node.word_index!==null&&node.word_index>=0&&node.word_index<text.length){
-      terminals.push({
-        text:text[node.word_index],
-        parts:lexicalSubscripts(node),
-        form:String(node.form_feature??'').trim(),
-        x:mid,
-        y:y+39
-      });
-      maxDepth=Math.max(maxDepth,depth+1);
+    }
+
+    if(node.triangle_text!==null){
+      const span=Math.max(labelWidths.get(node.uid),
+        textWidth(node.triangle_text,'20px Georgia')+34,125);
+      triangles.push({phrase:node.triangle_text,x,y,span});
+      maxDepth=Math.max(maxDepth,position.depth+1);
+    }else if(!node.children.length){
+      const terminal=node.null_element?'Ø':
+        node.word_index!==null&&node.word_index>=0&&node.word_index<text.length
+          ?text[node.word_index]:null;
+      if(terminal!==null){
+        terminals.push({
+          text:terminal,
+          parts:lexicalSubscripts(node),
+          form:String(node.form_feature??'').trim(),
+          x,y:y+39
+        });
+        maxDepth=Math.max(maxDepth,position.depth+1);
+      }
     }
   }
-  const width=measure(root);
-  const sceneW=Math.max(900,width+2*SIDE);
-  assign(root,(sceneW-width)/2,0);
+
   const sceneH=Math.max(580,TOP+(maxDepth+1)*V_GAP+60);
   return {width,maxDepth,points,terminals,triangles,edges,labelWidths,sceneW,sceneH};
 }
+
 function geometryOfTree(layout){
   let left=Infinity,top=Infinity,right=-Infinity,bottom=-Infinity;
   const add=(a,b,c,d)=>{left=Math.min(left,a);top=Math.min(top,b);right=Math.max(right,c);bottom=Math.max(bottom,d);};
