@@ -1772,10 +1772,24 @@ function createTreeSvg(layout,comments){
       // lexical items, and ordinary tree branches.
       const sourceSide=a.x>=b.x?1:-1;
       const targetSide=b.x<=a.x?-1:1;
-      const aHalf=(layout.labelWidths.get(source.uid)??76)/2;
-      const bHalf=(layout.labelWidths.get(targetId)??76)/2;
-      const startX=a.x+sourceSide*(aHalf+8);
-      const endX=b.x+targetSide*(bHalf+8);
+      // Anchor arrows to the visible text, not the wider invisible node
+      // hitboxes (which reserve at least 76 px for easier clicking).
+      const anchorX=(node,point,side)=>{
+        const label=displayLabel(node);
+        if(label==='EMPTY')return point.x+side*9;
+        const replaced=node.trace?.placement==='replace-label';
+        const font=`${replaced?'italic':'bold'} 20px Georgia`;
+        const mainWidth=textWidth(label,font);
+        const suffixWidth=displayLabelParts(node).reduce((width,part)=>
+          width+3+textWidth(part.text,`${part.italic?'italic ':''}13px Georgia`),0);
+        const padding=9;
+        return point.x+(side>0
+          ?mainWidth/2+suffixWidth+padding
+          :-mainWidth/2-padding);
+      };
+      const startX=anchorX(source,a,sourceSide);
+      const target=findNode(root,targetId);
+      const endX=anchorX(target,b,targetSide);
       const startY=a.y+24;
       const endY=b.y+24;
       const routeY=Math.max(layout.sceneH+18,startY+95,endY+95);
