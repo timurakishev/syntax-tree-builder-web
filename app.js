@@ -879,6 +879,8 @@ async function insertOrEditTrace(){
   showDialog(node.trace?'Edit movement trace':'Insert movement trace',(body,footer)=>{
     const group=document.createElement('div');
     group.className='dialog-group';
+    group.style.display='grid';
+    group.style.rowGap='10px';
 
     const placementLabel=document.createElement('label');
     placementLabel.textContent='Placement';
