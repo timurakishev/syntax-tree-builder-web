@@ -22,6 +22,10 @@ export function makeNode(label='?') {
     uid:uid(),
     word_index:null,
     null_element:false,
+    trace:null,
+    movement_arrows:[],
+    movement_chain_id:'',
+    movement_index:'',
     label_features:'',
     lexical_features:'',
     form_feature:'',
@@ -39,6 +43,15 @@ export function normalizeNode(raw) {
     uid: String(raw.uid || uid()),
     word_index: raw.word_index ?? null,
     null_element: raw.null_element === true,
+    trace: raw.trace == null ? null : {
+      placement: String(raw.trace.placement ?? ''),
+      kind: String(raw.trace.kind ?? ''),
+      subscript: String(raw.trace.subscript ?? '')
+    },
+    movement_arrows: Array.isArray(raw.movement_arrows)
+      ? raw.movement_arrows.map(value => String(value)) : [],
+    movement_chain_id: String(raw.movement_chain_id ?? ''),
+    movement_index: String(raw.movement_index ?? ''),
     label_features: String(raw.label_features ?? ''),
     lexical_features: String(raw.lexical_features ?? ''),
     form_feature: String(raw.form_feature ?? ''),
@@ -69,18 +82,46 @@ export function tokenize(sentence) {
 }
 export function allowedLabels(root,node) {
   let labels = node===root ? CATEGORIES.slice(0,13) : [...CATEGORIES];
-  if (node.children.length || node.word_index!==null || node.triangle_text!==null || node.null_element)
+  if (node.children.length || node.word_index!==null || node.triangle_text!==null || node.null_element || node.trace)
     labels=labels.filter(x=>x!=='EMPTY');
   if (node.children.length) labels=labels.filter(x=>isPhrase(x)||isProjection(x));
   if (node.triangle_text!==null) labels=labels.filter(x=>isPhrase(x)&&x!=='EMPTY');
   if (node.word_index!==null || node.null_element) labels=labels.filter(isHead);
+  if (node.trace) {
+    labels=labels.filter(isHead(node.label)
+      ? isHead : label => isPhrase(label) && label !== 'EMPTY');
+  }
   return labels;
 }
 export function ensureTreeShape(root,words) {
   const nodes=[...walk(root)];
   if (nodes.length>150 || new Set(nodes.map(n=>n.uid)).size!==nodes.length)
     throw Error('Tree is too large or contains repeated node IDs.');
+  const knownIds=new Set(nodes.map(n=>n.uid));
   for(const n of nodes){
+    if(n.trace!==null){
+      const t=n.trace;
+      if(typeof t!=='object' ||
+         !['replace-label','below-head'].includes(t.placement) ||
+         !['index','category','lexical'].includes(t.kind) ||
+         typeof t.subscript!=='string' || t.subscript.length>40 ||
+         !t.subscript.trim())
+        throw Error('Invalid movement trace notation.');
+      if(!isHead(n.label) && !(isPhrase(n.label) && n.label!=='EMPTY'))
+        throw Error('A trace requires a head or phrase category.');
+      if(t.placement==='below-head'&&!isHead(n.label))
+        throw Error('Only a head can have a trace below its label.');
+      if(n===root || n.children.length || n.word_index!==null ||
+         n.null_element || n.triangle_text!==null)
+        throw Error('A trace must occupy an empty non-root terminal position.');
+    }
+    if(!Array.isArray(n.movement_arrows) || n.movement_arrows.length>30 ||
+       n.movement_arrows.some(id=>typeof id!=='string'||!knownIds.has(id)||id===n.uid))
+      throw Error('Invalid movement arrow in saved tree.');
+    if(n.movement_chain_id.length>32 || n.movement_index.length>20)
+      throw Error('Invalid movement-chain identifier.');
+    if(n.movement_chain_id && !n.movement_index)
+      throw Error('A movement chain must have a visible index.');
     if(n.children.length>3) throw Error('Nodes with more than three daughters are not supported.');
     if(n.word_index!==null && (!Number.isInteger(n.word_index)||n.word_index<0||n.word_index>=words.length))
       throw Error('Invalid terminal word index in saved tree.');
@@ -89,7 +130,7 @@ export function ensureTreeShape(root,words) {
     if(n.triangle_text!==null){
       if(typeof n.triangle_text!=='string'||!n.triangle_text.trim()||n.triangle_text.length>300)
         throw Error('Invalid triangle text in saved tree.');
-      if(!isPhrase(n.label)||n.label==='EMPTY'||n.children.length||n.word_index!==null)
+      if(!isPhrase(n.label)||n.label==='EMPTY'||n.children.length||n.word_index!==null||n.trace)
         throw Error('A triangle requires a terminal phrase node.');
       const a=n.triangle_indices;
       if(!a.length || a.some(i=>!Number.isInteger(i)||i<0||i>=words.length) ||

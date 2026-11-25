@@ -16,6 +16,7 @@ const iconPaths={
   word:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M8 9h8M12 9v7M9 16h6"/>',
   features:'<path d="M8 4H5v16h3M16 4h3v16h-3"/><text x="12" y="16.2" text-anchor="middle" font-size="13" font-family="Georgia,serif" font-weight="bold" font-style="italic" fill="currentColor" stroke="none">f</text>',
   comment:'<path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5 9 9 0 0 1-4-.9L3 21l1.9-5.5A8.5 8.5 0 1 1 21 11.5z"/>',
+  movement:'<path d="M4 20c6-1 6-10 12-12h4M16 4l4 4-4 4"/><circle cx="4" cy="20" r="2"/>',
   delete:'<path d="M3 6h18M8 6V4h8v2M5 6l1 15h12l1-15M10 10v7M14 10v7"/>',
   reset:'<path d="m7 21-4-4a2 2 0 0 1 0-3l10-10a2 2 0 0 1 3 0l5 5a2 2 0 0 1 0 3L11 21"/><path d="M22 21H7"/><path d="m5 11 9 9"/>',
   undo:'<path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-2"/>',
@@ -24,7 +25,7 @@ const iconPaths={
 const TOOL_CONFIG=[
   ['branches','Expand tree'],
   ['label','Change label'],['word','Attach/Edit word'],
-  ['features','Attach/Edit feature'],['comment','Add comment'],
+  ['features','Attach/Edit feature'],['movement','Movement'],['comment','Add comment'],
   ['delete','Delete subtree'],['reset','Reset tree']
 ];
 const toolButtons={};
@@ -38,6 +39,7 @@ let zoom=1, leftCollapsed=false,rightCollapsed=false;
 let floatingPosition=null, toastTimer=null;
 let sceneWidth=900,sceneHeight=580;
 let scrollReset=false, menuOpen=false;
+let pendingMovement=null;
 const textCanvas=document.createElement('canvas'), textCtx=textCanvas.getContext('2d');
 
 function words(){return mode==='free'?freeWords:(sentences.length?tokenize(sentences[currentIndex]):[]);}
@@ -47,7 +49,7 @@ const used=()=>usedWordIndices(root);
 const heading=x=>x==='EMPTY'?'Empty':x;
 function eligibleBranchParent(node){
   return !!node&&node.word_index===null&&!node.null_element&&
-    node.triangle_text===null&&node.label!=='?'&&node.label!=='EMPTY'&&
+    node.triangle_text===null&&!node.trace&&node.label!=='?'&&node.label!=='EMPTY'&&
     (isPhrase(node.label)||isProjection(node.label));
 }
 
@@ -80,7 +82,7 @@ function canRemoveParentAbove(node){
   if(!node)return false;
   const parent=findParent(root,node.uid);
   if(!parent||parent.children.length!==1)return false;
-  if(parent.uid===root.uid&&(!isPhrase(node.label)||node.label==='EMPTY'))return false;
+  if(parent.uid===root.uid&&(!isPhrase(node.label)||node.label==='EMPTY'||node.trace))return false;
   return true;
 }
 const textWidth=(str,font='20px Georgia')=>{textCtx.font=font;return textCtx.measureText(String(str)).width;};
@@ -265,6 +267,13 @@ function showInstructions(){
       'Build your trees and switch between exercises using Previous, Next, or Go to. Your work is automatically backed up in this browser.'
     ]);
 
+    section('Movement — traces and arrows',[
+      'Select a head or phrase position and open Movement. Insert a trace in an empty terminal position: it can replace the selected label or, for heads, appear below the head label.',
+      'Movement arrows are optional. Choose Draw movement arrow, then click the destination node. The arrow does not rearrange the tree or assign words.',
+      'To mark a completed movement chain, select the pronounced constituent, choose Link this constituent to a trace, and click the trace. Repeat to link more traces with the same index.',
+      'Traces never count as worksheet words. Movement indices are separate from binding coindexation in Attach/Edit feature.'
+    ]);
+
     section('Saving and continuing your work',[
       'Download Progress saves the entire worksheet and all your trees as one editable .stb.json file. Download it before finishing, switching devices, or submitting editable work.',
       'Open Progress loads a previously downloaded .stb.json file so you can continue editing.',
@@ -336,6 +345,8 @@ function enabled(name){
   if(name==='comment'||name==='reset')return editable;
   if(!editable||!node)return false;
   if(name==='label')return true;
+  if(name==='movement')return node.label!=='?' && node.label!=='EMPTY' &&
+    (isHead(node.label)||isPhrase(node.label));
   if(name==='features'){
     return node.label!=='EMPTY' &&
       (isHead(node.label)||isPhrase(node.label));
@@ -346,7 +357,7 @@ function enabled(name){
   if(name==='branches')return availableBranchRoom(node)>0||
     (eligibleBranchParent(node)&&isPhrase(node.label)&&!node.children.length)||
     canInsertParentAbove(node)||canRemoveParentAbove(node);
-  if(name==='word')return !node.children.length&&(
+  if(name==='word')return !node.trace&&!node.children.length&&(
     node.triangle_text!==null || (node.uid!==root.uid&&isHead(node.label)));
   return false;
 }
@@ -365,9 +376,16 @@ function updateControls(){
   $('prevBtn').disabled=mode!=='practice'||!sentences.length||currentIndex<=0;
   $('nextBtn').disabled=mode!=='practice'||!sentences.length||currentIndex>=sentences.length-1;
   $('duplicateBtn').disabled=mode!=='practice'||!sentences.length||sentences.length>=1000;
-  if(!node){$('selectionText').textContent='Click a node to select it';return;}
+  if(!node){
+    $('selectionText').textContent=pendingMovement
+      ?'Choose the movement destination (Escape cancels)'
+      :'Click a node to select it';
+    return;
+  }
   let hint;
-  if(node.null_element)hint='Click Attach/Edit word to replace or remove Ø';
+  if(pendingMovement)hint='Click the destination node, or press Escape to cancel';
+  else if(node.trace)hint='Click Movement to edit or remove the trace';
+  else if(node.null_element)hint='Click Attach/Edit word to replace or remove Ø';
   else if(node.triangle_text!==null)hint='Click Attach/Edit word to edit or remove triangle';
   else if(enabled('branches'))hint='Use Expand tree to modify the branching structure';
   else hint='Double-click to change label';
@@ -381,7 +399,27 @@ function updateSelection(){
   });
 }
 function checkpoint(){undoStack.push(clone(root));if(undoStack.length>80)undoStack.shift();redoStack=[];}
+function removeBrokenMovementArrows(){
+  const nodes=[...walk(root)];
+  const ids=new Set(nodes.map(node=>node.uid));
+  const chains=new Map();
+  for(const node of nodes){
+    node.movement_arrows=node.movement_arrows.filter(id=>id!==node.uid&&ids.has(id));
+    if(node.movement_chain_id){
+      const members=chains.get(node.movement_chain_id)??[];
+      members.push(node);
+      chains.set(node.movement_chain_id,members);
+    }
+  }
+  // A chain needs at least two extant positions.
+  for(const members of chains.values()){
+    if(members.length!==1)continue;
+    members[0].movement_chain_id='';
+    members[0].movement_index='';
+  }
+}
 function afterEdit(){
+  removeBrokenMovementArrows();
   if(mode==='free')freeTree=clone(root);
   else if(sentences.length)workingTrees[currentIndex]=clone(root);
   if(mode==='practice'&&sentences.length)backupNoticeRequested=true;
@@ -684,7 +722,7 @@ function editFeatures(){
 }
 async function editTriangle(){
   const node=currentNode();
-  if(!node||!isPhrase(node.label)||node.label==='EMPTY'||node.children.length||node.word_index!==null)return;
+  if(!node||!isPhrase(node.label)||node.label==='EMPTY'||node.children.length||node.word_index!==null||node.trace)return;
   if(node.triangle_text!==null){
     const {ok,value}=await inputDialog('Edit triangle text','Edit text (leave empty to remove triangle):',node.triangle_text);
     if(!ok)return;
@@ -827,6 +865,251 @@ async function attachWord(anchor){
 
   showMenu(anchor,items);
 }
+// Movement is a visual notation layer. It never consumes worksheet words.
+function canTrace(node){
+  return !!node && node.uid!==root.uid && !node.children.length &&
+    node.word_index===null && !node.null_element && node.triangle_text===null &&
+    (isHead(node.label)||(isPhrase(node.label)&&node.label!=='EMPTY'));
+}
+
+async function insertOrEditTrace(){
+  const node=currentNode();
+  if(!node || (!node.trace&&!canTrace(node)))return;
+
+  showDialog(node.trace?'Edit movement trace':'Insert movement trace',(body,footer)=>{
+    const group=document.createElement('div');
+    group.className='dialog-group';
+
+    const placementLabel=document.createElement('label');
+    placementLabel.textContent='Placement';
+    placementLabel.className='field-label';
+    const placement=document.createElement('select');
+    const placements=[['replace-label','Replace the head/phrase label']];
+    if(isHead(node.label))placements.push(['below-head','Below the head label']);
+    for(const [value,text] of placements){
+      const option=document.createElement('option');
+      option.value=value;
+      option.textContent=text;
+      placement.append(option);
+    }
+    placement.value=node.trace?.placement??(isHead(node.label)?'below-head':'replace-label');
+    group.append(placementLabel,placement);
+
+    const kindLabel=document.createElement('label');
+    kindLabel.textContent='Subscript identifies';
+    kindLabel.className='field-label';
+    kindLabel.style.marginTop='16px';
+    const kind=document.createElement('select');
+    for(const [value,text] of [
+      ['index','Movement-chain index (i, j, 1, 2, etc.)'],
+      ['category','Syntactic category (DP, V, Voice, etc.)'],
+      ['lexical','Lexical identity (have, be, etc.)']
+    ]){
+      const option=document.createElement('option');
+      option.value=value;
+      option.textContent=text;
+      kind.append(option);
+    }
+    kind.value=node.trace?.kind??'index';
+    group.append(kindLabel,kind);
+
+    const subscriptLabel=document.createElement('label');
+    subscriptLabel.textContent='Subscript';
+    subscriptLabel.className='field-label';
+    subscriptLabel.style.marginTop='16px';
+    const subscript=document.createElement('input');
+    subscript.type='text';
+    subscript.maxLength=40;
+    subscript.autocomplete='off';
+    subscript.spellcheck=false;
+    const examples={index:'i',category:node.label,lexical:'have'};
+    subscript.value=node.trace?.subscript??examples[kind.value];
+    let previousKind=kind.value;
+    kind.addEventListener('change',()=>{
+      if(subscript.value.trim()===examples[previousKind]){
+        subscript.value=examples[kind.value];
+      }
+      previousKind=kind.value;
+    });
+    group.append(subscriptLabel,subscript);
+
+    const note=document.createElement('p');
+    note.className='dialog-note';
+    note.textContent='A trace never uses an Excel worksheet word. Binding coindexation is edited separately under Attach/Edit feature.';
+    group.append(note);
+    body.append(group);
+
+    addDialogButton(footer,'Cancel',closeDialog);
+    const save=()=>{
+      const value=subscript.value.trim();
+      if(!value || value.length>40){
+        subscript.focus();
+        showToast('Enter a short trace subscript.');
+        return;
+      }
+      const next={placement:placement.value,kind:kind.value,subscript:value};
+      if(JSON.stringify(next)!==JSON.stringify(node.trace)){
+        checkpoint();
+        node.trace=next;
+        // A manually reconfigured trace is no longer forced to display its old chain index.
+        if(next.kind==='index'&&node.movement_chain_id){
+          node.movement_index=value;
+          for(const partner of walk(root)){
+            if(partner.movement_chain_id===node.movement_chain_id){
+              partner.movement_index=value;
+            }
+          }
+        }
+        afterEdit();
+      }
+      closeDialog();
+    };
+    addDialogButton(footer,'Save trace',save,true);
+    requestAnimationFrame(()=>subscript.focus());
+  });
+}
+
+function moveLinkIndex(node){
+  return node.movement_chain_id ? node.movement_index : '';
+}
+
+function unlinkMovementNode(node){
+  const chainId=node.movement_chain_id;
+  if(!chainId)return;
+  checkpoint();
+  node.movement_chain_id='';
+  node.movement_index='';
+  const remaining=[...walk(root)].filter(partner=>partner.movement_chain_id===chainId);
+  if(remaining.length===1){
+    remaining[0].movement_chain_id='';
+    remaining[0].movement_index='';
+  }
+  afterEdit();
+}
+
+function beginMovement(kind){
+  const source=currentNode();
+  if(!source)return;
+  pendingMovement={kind,sourceUid:source.uid};
+  closeMenu();
+  setInfo(kind==='arrow'
+    ?'Movement arrow: click its landing position (Escape cancels).'
+    :'Movement chain: click a trace position (Escape cancels).',15000);
+  updateControls();
+}
+
+async function finishMovement(destinationUid){
+  const action=pendingMovement;
+  if(!action)return false;
+  const source=findNode(root,action.sourceUid);
+  const destination=findNode(root,destinationUid);
+  if(!source||!destination){pendingMovement=null;return true;}
+  if(source.uid===destination.uid){
+    setInfo('Choose a different destination node. Press Escape to cancel.',10000);
+    return true;
+  }
+
+  const bothHeads=isHead(source.label)&&isHead(destination.label);
+  const bothPhrases=isPhrase(source.label)&&isPhrase(destination.label);
+  if(!bothHeads&&!bothPhrases){
+    setInfo('Connect head to head, or phrase to phrase.',10000);
+    return true;
+  }
+
+  if(action.kind==='arrow'){
+    pendingMovement=null;
+    if(!source.movement_arrows.includes(destination.uid)){
+      checkpoint();
+      source.movement_arrows.push(destination.uid);
+      afterEdit();
+    }else{
+      render();
+    }
+    selectNode(source.uid);
+    setInfo('Movement arrow added.');
+    return true;
+  }
+
+  if(!destination.trace || source.trace){
+    setInfo('Start at the overt moved constituent and finish at a trace.',10000);
+    return true;
+  }
+  if(source.movement_chain_id && destination.movement_chain_id &&
+     source.movement_chain_id!==destination.movement_chain_id){
+    setInfo('That trace already belongs to another movement chain.',10000);
+    return true;
+  }
+
+  const suggested=source.movement_index||destination.movement_index||'1';
+  pendingMovement=null;
+  const {ok,value}=await inputDialog(
+    'Link movement chain',
+    'Movement-chain index (use numbers to distinguish from binding indices):',
+    suggested
+  );
+  if(!ok)return true;
+  const index=value.trim();
+  if(!index || index.length>20){
+    await alertDialog('Invalid movement index','Enter an index of 1–20 characters.');
+    return true;
+  }
+  checkpoint();
+  const chainId=source.movement_chain_id||destination.movement_chain_id||uid();
+  for(const partner of walk(root)){
+    if(partner.uid===source.uid || partner.uid===destination.uid ||
+       partner.movement_chain_id===chainId){
+      partner.movement_chain_id=chainId;
+      partner.movement_index=index;
+      if(partner.trace?.kind==='index')partner.trace.subscript=index;
+    }
+  }
+  afterEdit();
+  selectNode(source.uid);
+  setInfo('Movement chain linked.');
+  return true;
+}
+
+function editMovement(anchor){
+  const node=currentNode();
+  if(!node||!enabled('movement'))return;
+  const items=[];
+
+  if(node.trace){
+    items.push({label:'Edit trace',action:insertOrEditTrace});
+    items.push({label:'Remove trace',action:()=>{
+      checkpoint();
+      node.trace=null;
+      node.movement_chain_id='';
+      node.movement_index='';
+      afterEdit();
+    }});
+  }else if(canTrace(node)){
+    items.push({label:'Insert trace',action:insertOrEditTrace});
+  }
+
+  items.push({separator:true});
+  items.push({label:'Draw movement arrow from this node',action:()=>beginMovement('arrow')});
+  if(!node.trace){
+    items.push({label:'Link this constituent to a trace',action:()=>beginMovement('chain')});
+  }
+
+  const incoming=[...walk(root)].filter(other=>other.movement_arrows.includes(node.uid));
+  if(node.movement_arrows.length||incoming.length){
+    items.push({label:'Remove arrows connected to this node',action:()=>{
+      checkpoint();
+      node.movement_arrows=[];
+      for(const other of walk(root)){
+        other.movement_arrows=other.movement_arrows.filter(id=>id!==node.uid);
+      }
+      afterEdit();
+    }});
+  }
+  if(node.movement_chain_id){
+    items.push({label:'Unlink this node from movement chain',action:()=>unlinkMovementNode(node)});
+  }
+  showMenu(anchor,items);
+}
+
 async function addComment(){
   if(!ready())return;
   const {ok,value}=await inputDialog('Add Comment','Enter your question or comment:','',{multiline:true});
@@ -851,6 +1134,7 @@ function deleteNode(){
   selectedUid=parent.uid;afterEdit();
 }
 async function resetTree(){
+  pendingMovement=null;
   if(!ready()||!await confirmDialog('Reset tree','Discard the current tree and all comments and start again with an empty root?'))return;
   checkpoint();root=makeNode('?');selectedUid=null;afterEdit();
 }
@@ -858,12 +1142,14 @@ function runTool(name,anchor){
   if(!enabled(name))return;
   ({branches:()=>addBranches(anchor),parent:insertParentAbove,
     label:()=>changeLabel(anchor),word:()=>attachWord(anchor),
-    features:editFeatures,comment:addComment,delete:deleteNode,reset:resetTree})[name]?.();
+    features:editFeatures,movement:()=>editMovement(anchor),
+    comment:addComment,delete:deleteNode,reset:resetTree})[name]?.();
 }
 function switchMode(next){
   if(next===mode||!['free','practice'].includes(next))return;
   if(mode==='free')freeTree=clone(root);
   else if(sentences.length)workingTrees[currentIndex]=clone(root);
+  pendingMovement=null;
   mode=next;
   root=next==='free'?normalizeNode(freeTree):
     workingTrees[currentIndex]?normalizeNode(workingTrees[currentIndex]):makeNode('?');
@@ -878,6 +1164,7 @@ function loadBankData(raw){
   scrollReset=true;setInfo('');render();
 }
 function switchExercise(index){
+  pendingMovement=null;
   if(mode!=='practice'||index<0||index>=sentences.length||index===currentIndex)return;
   workingTrees[currentIndex]=clone(root);currentIndex=index;
   root=workingTrees[index]?normalizeNode(workingTrees[index]):makeNode('?');
@@ -911,7 +1198,7 @@ function duplicateExercise(){
   sentences.splice(insertAt,0,sentences[currentIndex]);exerciseIds.splice(insertAt,0,newLabel);
   workingTrees[insertAt]=clone(root);
   currentIndex=insertAt;root=normalizeNode(workingTrees[insertAt]);
-  selectedUid=null;undoStack=[];redoStack=[];scrollReset=true;
+  selectedUid=null;pendingMovement=null;undoStack=[];redoStack=[];scrollReset=true;
   backupNoticeRequested=true;
   render();
 }
@@ -1075,6 +1362,7 @@ async function saveProgress(interactive=true){
   }
 }
 async function openProgress(file){
+  pendingMovement=null;
   if(mode!=='practice')return;
   try{
     const parsed=readProgress(JSON.parse(await file.text()));
@@ -1114,6 +1402,28 @@ function labelSubscripts(node){
   return parts;
 }
 
+function traceParts(node){
+  if(!node.trace)return [];
+  const subscript=node.trace.kind==='index' && node.movement_chain_id
+    ?node.movement_index:node.trace.subscript;
+  return [{text:subscript,italic:node.trace.kind!=='category'}];
+}
+
+function displayLabel(node){
+  return node.trace?.placement==='replace-label'?'t':node.label;
+}
+
+function displayLabelParts(node){
+  if(node.trace?.placement==='replace-label')return traceParts(node);
+  const parts=labelSubscripts(node);
+  // A movement-chain number is stored separately from ordinary binding coindexation.
+  if(node.movement_chain_id&&!node.trace){
+    const index=node.coindexation?`m${node.movement_index}`:node.movement_index;
+    parts.push({text:index,italic:true});
+  }
+  return parts;
+}
+
 function lexicalSubscripts(node){
   const feature=String(node.lexical_features??'').trim();
   return feature?[{
@@ -1141,8 +1451,9 @@ function widthForLabel(label,parts=[],bold=false){
   return Math.max(76,mainWidth+2*subWidth+34);
 }
 
-function appendAnnotatedText(parent,base,parts,x,y,{bold=false,middle=false,color=INK}={}){
-  let left=x-textWidth(base,`${bold?'bold ':''}20px Georgia`)/2;
+function appendAnnotatedText(parent,base,parts,x,y,{bold=false,italic=false,middle=false,color=INK}={}){
+  const font=`${bold?'bold ':''}${italic?'italic ':''}20px Georgia`;
+  let left=x-textWidth(base,font)/2;
 
   const mainAttrs={
     x:left,y,
@@ -1152,10 +1463,11 @@ function appendAnnotatedText(parent,base,parts,x,y,{bold=false,middle=false,colo
   };
 
   if(bold)mainAttrs['font-weight']='bold';
+  if(italic)mainAttrs['font-style']='italic';
   if(middle)mainAttrs['dominant-baseline']='middle';
 
   parent.append(svgEl('text',mainAttrs,base));
-  left+=textWidth(base,`${bold?'bold ':''}20px Georgia`);
+  left+=textWidth(base,font);
 
   for(const part of parts){
     left+=3;
@@ -1193,7 +1505,7 @@ function layoutTree(){
   function build(node,depth=0){
     if(depth>35)throw Error('Tree is too deep to display.');
 
-    const labelWidth=widthForLabel(node.label,labelSubscripts(node),true);
+    const labelWidth=widthForLabel(displayLabel(node),displayLabelParts(node),true);
     labelWidths.set(node.uid,labelWidth);
     const contours=[{left:-labelWidth/2,right:labelWidth/2}];
     const positions=new Map([[node.uid,{x:0,depth:0}]]);
@@ -1244,12 +1556,13 @@ function layoutTree(){
       const half=Math.max(65,span/2-4);
       contours[1]={left:-half-8,right:half+8};
     }else{
-      const terminal=node.null_element?'Ø':
+      const terminal=node.trace?.placement==='below-head'?'t':
+        node.null_element?'Ø':
         node.word_index!==null&&node.word_index>=0&&node.word_index<text.length
           ?text[node.word_index]:null;
 
       if(terminal!==null){
-        const parts=lexicalSubscripts(node);
+        const parts=node.trace?.placement==='below-head'?traceParts(node):lexicalSubscripts(node);
         const main=textWidth(terminal,'20px Georgia');
         const suffix=annotatedWidth(terminal,parts)-main;
         const form=String(node.form_feature??'').trim();
@@ -1293,15 +1606,17 @@ function layoutTree(){
       triangles.push({phrase:node.triangle_text,x,y,span});
       maxDepth=Math.max(maxDepth,position.depth+1);
     }else if(!node.children.length){
-      const terminal=node.null_element?'Ø':
+      const terminal=node.trace?.placement==='below-head'?'t':
+        node.null_element?'Ø':
         node.word_index!==null&&node.word_index>=0&&node.word_index<text.length
           ?text[node.word_index]:null;
       if(terminal!==null){
         terminals.push({
           text:terminal,
-          parts:lexicalSubscripts(node),
-          form:String(node.form_feature??'').trim(),
-          x,y:y+39
+          parts:node.trace?.placement==='below-head'?traceParts(node):lexicalSubscripts(node),
+          form:node.trace?'':String(node.form_feature??'').trim(),
+          x,y:y+39,
+          italic:node.trace?.placement==='below-head'
         });
         maxDepth=Math.max(maxDepth,position.depth+1);
       }
@@ -1415,9 +1730,11 @@ function getTreePalette(){
 function createTreeSvg(layout,comments){
   const palette=getTreePalette();
   const svg=$('treeSvg');svg.replaceChildren();
-  const maxRight=Math.max(layout.sceneW,...comments.map(c=>c.x+c.w+30));
-  const maxBottom=Math.max(layout.sceneH,...comments.map(c=>c.y+c.h+30));
-  const minX=Math.min(0,...comments.map(c=>c.x-30));
+  const hasMovementArrows=[...walk(root)].some(node=>node.movement_arrows.length>0);
+  const maxRight=Math.max(layout.sceneW+(hasMovementArrows?150:0),...comments.map(c=>c.x+c.w+30));
+  const maxBottom=Math.max(layout.sceneH+(hasMovementArrows?120:0),...comments.map(c=>c.y+c.h+30));
+  const arrowPadding=hasMovementArrows?150:0;
+  const minX=Math.min(-arrowPadding,...comments.map(c=>c.x-30));
   const minY=Math.min(0,...comments.map(c=>c.y-30));
   const offsetX=-minX,offsetY=-minY;
   sceneWidth=Math.max(1,maxRight-minX);sceneHeight=Math.max(1,maxBottom-minY);
@@ -1435,13 +1752,56 @@ function createTreeSvg(layout,comments){
   for(const e of layout.edges){
     content.append(svgEl('line',{x1:e.x1,y1:e.y1,x2:e.x2,y2:e.y2,stroke:palette.edge,'stroke-width':2,'stroke-linecap':'round'}));
   }
+  // Arrows are tied to stable node IDs and redraw with every layout update.
+  const arrowGroup=svgEl('g',{'class':'movement-arrows'});
+  const markerId='movement-arrowhead';
+  const marker=svgEl('marker',{
+    id:markerId,viewBox:'0 0 12 12',refX:10,refY:6,
+    markerWidth:8,markerHeight:8,orient:'auto-start-reverse'
+  });
+  marker.append(svgEl('path',{d:'M1 1 L11 6 L1 11 Z',fill:palette.selection}));
+  defs.append(marker);
+  for(const source of walk(root)){
+    const a=layout.points.get(source.uid);
+    if(!a)continue;
+    for(const targetId of source.movement_arrows){
+      const b=layout.points.get(targetId);
+      if(!b)continue;
+      // Attach at the outside edges and route beneath the displayed tree.
+      // This prevents the arrow shaft crossing intermediate category labels,
+      // lexical items, and ordinary tree branches.
+      const sourceSide=a.x>=b.x?1:-1;
+      const targetSide=b.x<=a.x?-1:1;
+      const aHalf=(layout.labelWidths.get(source.uid)??76)/2;
+      const bHalf=(layout.labelWidths.get(targetId)??76)/2;
+      const startX=a.x+sourceSide*(aHalf+8);
+      const endX=b.x+targetSide*(bHalf+8);
+      const startY=a.y+24;
+      const endY=b.y+24;
+      const routeY=Math.max(layout.sceneH+18,startY+95,endY+95);
+      const curve=`M${startX} ${startY} `+
+        `C${startX+sourceSide*55} ${routeY} `+
+        `${endX+targetSide*55} ${routeY} ${endX} ${endY}`;
+      // A thin canvas-colored outline helps arrows remain legible over branches.
+      arrowGroup.append(svgEl('path',{
+        d:curve,fill:'none',stroke:palette.bg,'stroke-width':6,
+        'stroke-linecap':'round','stroke-linejoin':'round'
+      }));
+      arrowGroup.append(svgEl('path',{
+        d:curve,fill:'none',stroke:palette.selection,'stroke-width':2.4,
+        'stroke-linecap':'round','marker-end':`url(#${markerId})`
+      }));
+    }
+  }
+  content.append(arrowGroup);
   for(const n of walk(root)){
     const point=layout.points.get(n.uid),w=layout.labelWidths.get(n.uid);
-    const parts=labelSubscripts(n);
-    const mainWidth=textWidth(n.label,'bold 20px Georgia');
-    const annotated=n.label!=='EMPTY'&&parts.length>0;
+    const label=displayLabel(n);
+    const parts=displayLabelParts(n);
+    const mainWidth=textWidth(label,n.trace?.placement==='replace-label'?'italic 20px Georgia':'bold 20px Georgia');
+    const annotated=label!=='EMPTY'&&parts.length>0;
     const hitX=annotated?w/2-mainWidth/2-12:0;
-    const hitW=annotated?annotatedWidth(n.label,parts,true)+24:w;
+    const hitW=annotated?annotatedWidth(label,parts,true)+24:w;
 
     const group=svgEl('g',{
       'class':'tree-node',
@@ -1458,7 +1818,7 @@ function createTreeSvg(layout,comments){
       fill:'transparent'
     }));
 
-    if(n.label==='EMPTY')group.append(svgEl('rect',{
+    if(label==='EMPTY')group.append(svgEl('rect',{
       'class':'hover-frame',
       x:1,y:1,width:w-2,height:45,rx:10,
       fill:'none',stroke:palette.hover,
@@ -1482,9 +1842,10 @@ function createTreeSvg(layout,comments){
 
     group.append(frame);
 
-    if(n.label!=='EMPTY'){
-      appendAnnotatedText(group,n.label,parts,w/2,24,{
-        bold:true,
+    if(label!=='EMPTY'){
+      appendAnnotatedText(group,label,parts,w/2,24,{
+        bold:n.trace?.placement!=='replace-label',
+        italic:n.trace?.placement==='replace-label',
         middle:true,
         color:palette.ink
       });
@@ -1493,6 +1854,10 @@ function createTreeSvg(layout,comments){
 
     group.addEventListener('click',event=>{
       event.stopPropagation();
+      if(pendingMovement){
+        finishMovement(n.uid);
+        return;
+      }
       selectNode(n.uid);
     });
 
@@ -1536,7 +1901,7 @@ function createTreeSvg(layout,comments){
       'font-family':'Georgia,serif','font-size':20,fill:palette.terminal},t.phrase));
   }
   for(const t of layout.terminals){
-    appendAnnotatedText(content,t.text,t.parts,t.x,t.y+28,{color:palette.terminal});
+    appendAnnotatedText(content,t.text,t.parts,t.x,t.y+28,{color:palette.terminal,italic:t.italic});
     
     if(t.form){
       content.append(svgEl('text',{
@@ -1563,7 +1928,7 @@ function createTreeSvg(layout,comments){
     group.addEventListener('pointerdown',e=>startCommentDrag(e,group,info));
     content.append(group);
   }
-  svg.onclick=e=>{if(e.target.closest?.('.tree-node,.comment-bubble'))return;selectNode(null);};
+  svg.onclick=e=>{if(e.target.closest?.('.tree-node,.comment-bubble'))return;if(!pendingMovement)selectNode(null);};
 }
 function startCommentDrag(event,group,info){
   if(event.button!==0)return;
@@ -1882,6 +2247,12 @@ function init(){
   },true);
   document.addEventListener('keydown',event=>{
     if(event.key==='Escape'){
+      if(pendingMovement){
+        pendingMovement=null;
+        setInfo('Movement action cancelled.');
+        updateControls();
+        return;
+      }
       if(menuOpen)closeMenu();
       else if($('overlay').classList.contains('show'))$('closeDialog').click();
       return;
