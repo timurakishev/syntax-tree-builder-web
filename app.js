@@ -914,7 +914,7 @@ async function insertOrEditTrace(){
     group.append(kindLabel,kind);
 
     const subscriptLabel=document.createElement('label');
-    subscriptLabel.textContent='Subscript';
+    subscriptLabel.textContent='Subscript (optional)';
     subscriptLabel.className='field-label';
     subscriptLabel.style.marginTop='16px';
     const subscript=document.createElement('input');
@@ -922,7 +922,7 @@ async function insertOrEditTrace(){
     subscript.maxLength=40;
     subscript.autocomplete='off';
     subscript.spellcheck=false;
-    const examples={index:'i',category:node.label,lexical:'have'};
+    const examples={index:'',category:node.label,lexical:'have'};
     subscript.value=node.trace?.subscript??examples[kind.value];
     let previousKind=kind.value;
     kind.addEventListener('change',()=>{
@@ -942,17 +942,12 @@ async function insertOrEditTrace(){
     addDialogButton(footer,'Cancel',closeDialog);
     const save=()=>{
       const value=subscript.value.trim();
-      if(!value || value.length>40){
-        subscript.focus();
-        showToast('Enter a short trace subscript.');
-        return;
-      }
       const next={placement:placement.value,kind:kind.value,subscript:value};
       if(JSON.stringify(next)!==JSON.stringify(node.trace)){
         checkpoint();
         node.trace=next;
         // A manually reconfigured trace is no longer forced to display its old chain index.
-        if(next.kind==='index'&&node.movement_chain_id){
+        if(next.kind==='index'&&node.movement_chain_id&&value){
           node.movement_index=value;
           for(const partner of walk(root)){
             if(partner.movement_chain_id===node.movement_chain_id){
@@ -1060,7 +1055,7 @@ async function finishMovement(destinationUid){
        partner.movement_chain_id===chainId){
       partner.movement_chain_id=chainId;
       partner.movement_index=index;
-      if(partner.trace?.kind==='index')partner.trace.subscript=index;
+      if(partner.trace?.kind==='index'&&partner.trace.subscript.trim())partner.trace.subscript=index;
     }
   }
   afterEdit();
@@ -1403,7 +1398,7 @@ function labelSubscripts(node){
 }
 
 function traceParts(node){
-  if(!node.trace)return [];
+  if(!node.trace || !node.trace.subscript.trim())return [];
   const subscript=node.trace.kind==='index' && node.movement_chain_id
     ?node.movement_index:node.trace.subscript;
   return [{text:subscript,italic:node.trace.kind!=='category'}];
@@ -1772,24 +1767,54 @@ function createTreeSvg(layout,comments){
       // lexical items, and ordinary tree branches.
       const sourceSide=a.x>=b.x?1:-1;
       const targetSide=b.x<=a.x?-1:1;
-      // Anchor arrows to the visible text, not the wider invisible node
-      // hitboxes (which reserve at least 76 px for easier clicking).
-      const anchorX=(node,point,side)=>{
+      // Use the visible text and attached terminals, rather than the
+      // larger invisible click targets. Leave room for the arrowhead.
+      const anchorX=(node,point,side,clearance)=>{
         const label=displayLabel(node);
-        if(label==='EMPTY')return point.x+side*9;
         const replaced=node.trace?.placement==='replace-label';
         const font=`${replaced?'italic':'bold'} 20px Georgia`;
-        const mainWidth=textWidth(label,font);
-        const suffixWidth=displayLabelParts(node).reduce((width,part)=>
-          width+3+textWidth(part.text,`${part.italic?'italic ':''}13px Georgia`),0);
-        const padding=9;
-        return point.x+(side>0
-          ?mainWidth/2+suffixWidth+padding
-          :-mainWidth/2-padding);
+        const mainWidth=label==='EMPTY'?0:textWidth(label,font);
+        const suffixWidth=label==='EMPTY'?0:displayLabelParts(node).reduce(
+          (width,part)=>width+3+textWidth(
+            part.text,`${part.italic?'italic ':''}13px Georgia`
+          ),0
+        );
+        let left=Math.max(9,mainWidth/2);
+        let right=Math.max(9,mainWidth/2+suffixWidth);
+
+        // A word or a trace below a head can be wider than that head.
+        const terminal=layout.terminals.find(t=>
+          Math.abs(t.x-point.x)<0.01 &&
+          Math.abs(t.y-(point.y+39))<0.01
+        );
+        if(terminal){
+          const wordWidth=textWidth(terminal.text,'20px Georgia');
+          const suffix=annotatedWidth(terminal.text,terminal.parts)-wordWidth;
+          left=Math.max(left,wordWidth/2);
+          right=Math.max(right,wordWidth/2+suffix);
+          if(terminal.form){
+            const formHalf=textWidth(terminal.form,'15px Georgia')/2;
+            left=Math.max(left,formHalf);
+            right=Math.max(right,formHalf);
+          }
+        }
+
+        // Also clear the full base of a collapsed phrase triangle.
+        const triangle=layout.triangles.find(t=>
+          Math.abs(t.x-point.x)<0.01 &&
+          Math.abs(t.y-point.y)<0.01
+        );
+        if(triangle){
+          const half=Math.max(65,triangle.span/2-4);
+          left=Math.max(left,half);
+          right=Math.max(right,half);
+        }
+
+        return point.x+(side>0?right+clearance:-left-clearance);
       };
-      const startX=anchorX(source,a,sourceSide);
+      const startX=anchorX(source,a,sourceSide,16);
       const target=findNode(root,targetId);
-      const endX=anchorX(target,b,targetSide);
+      const endX=anchorX(target,b,targetSide,26);
       const startY=a.y+24;
       const endY=b.y+24;
       const routeY=Math.max(layout.sceneH+18,startY+95,endY+95);

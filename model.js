@@ -104,8 +104,7 @@ export function ensureTreeShape(root,words) {
       if(typeof t!=='object' ||
          !['replace-label','below-head'].includes(t.placement) ||
          !['index','category','lexical'].includes(t.kind) ||
-         typeof t.subscript!=='string' || t.subscript.length>40 ||
-         !t.subscript.trim())
+         typeof t.subscript!=='string' || t.subscript.length>40)
         throw Error('Invalid movement trace notation.');
       if(!isHead(n.label) && !(isPhrase(n.label) && n.label!=='EMPTY'))
         throw Error('A trace requires a head or phrase category.');
