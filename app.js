@@ -1762,65 +1762,64 @@ function createTreeSvg(layout,comments){
     for(const targetId of source.movement_arrows){
       const b=layout.points.get(targetId);
       if(!b)continue;
-      // Attach at the outside edges and route beneath the displayed tree.
-      // This prevents the arrow shaft crossing intermediate category labels,
-      // lexical items, and ordinary tree branches.
-      const sourceSide=a.x>=b.x?1:-1;
-      const targetSide=b.x<=a.x?-1:1;
-      // Use the visible text and attached terminals, rather than the
-      // larger invisible click targets. Leave room for the arrowhead.
-      const anchorX=(node,point,side,clearance)=>{
-        const label=displayLabel(node);
-        const replaced=node.trace?.placement==='replace-label';
-        const font=`${replaced?'italic':'bold'} 20px Georgia`;
-        const mainWidth=label==='EMPTY'?0:textWidth(label,font);
-        const suffixWidth=label==='EMPTY'?0:displayLabelParts(node).reduce(
-          (width,part)=>width+3+textWidth(
-            part.text,`${part.italic?'italic ':''}13px Georgia`
-          ),0
-        );
-        let left=Math.max(9,mainWidth/2);
-        let right=Math.max(9,mainWidth/2+suffixWidth);
+      // Anchor each movement arrow below the selected node's visible content.
+      // For a phrase with daughters, use its lowest visible lexical material
+      // so that the arrow does not pass through the phrase's own subtree.
+      const arrowAnchor=(node,destination=false)=>{
+        let lowest=-Infinity;
+        const anchors=[];
 
-        // A word or a trace below a head can be wider than that head.
-        const terminal=layout.terminals.find(t=>
-          Math.abs(t.x-point.x)<0.01 &&
-          Math.abs(t.y-(point.y+39))<0.01
-        );
-        if(terminal){
-          const wordWidth=textWidth(terminal.text,'20px Georgia');
-          const suffix=annotatedWidth(terminal.text,terminal.parts)-wordWidth;
-          left=Math.max(left,wordWidth/2);
-          right=Math.max(right,wordWidth/2+suffix);
-          if(terminal.form){
-            const formHalf=textWidth(terminal.form,'15px Georgia')/2;
-            left=Math.max(left,formHalf);
-            right=Math.max(right,formHalf);
+        for(const member of walk(node)){
+          const point=layout.points.get(member.uid);
+          if(!point)continue;
+
+          const terminal=layout.terminals.find(item=>
+            Math.abs(item.x-point.x)<0.01 &&
+            Math.abs(item.y-(point.y+39))<0.01
+          );
+          const triangle=layout.triangles.find(item=>
+            Math.abs(item.x-point.x)<0.01 &&
+            Math.abs(item.y-point.y)<0.01
+          );
+
+          let bottom=point.y+(displayLabelParts(member).length?43:37);
+          if(triangle){
+            bottom=point.y+130;
+          }else if(terminal){
+            bottom=terminal.form?terminal.y+61:
+              terminal.parts.length?terminal.y+43:terminal.y+36;
+          }
+
+          // Keep every item at the lowest displayed level. A multi-word
+          // constituent will attach below the center of its bottom row.
+          if(bottom>lowest+0.5){
+            lowest=bottom;
+            anchors.length=0;
+            anchors.push(point.x);
+          }else if(Math.abs(bottom-lowest)<=0.5){
+            anchors.push(point.x);
           }
         }
 
-        // Also clear the full base of a collapsed phrase triangle.
-        const triangle=layout.triangles.find(t=>
-          Math.abs(t.x-point.x)<0.01 &&
-          Math.abs(t.y-point.y)<0.01
-        );
-        if(triangle){
-          const half=Math.max(65,triangle.span/2-4);
-          left=Math.max(left,half);
-          right=Math.max(right,half);
-        }
-
-        return point.x+(side>0?right+clearance:-left-clearance);
+        const x=anchors.length?
+          (Math.min(...anchors)+Math.max(...anchors))/2:
+          layout.points.get(node.uid).x;
+        // Leave more space for the arrowhead at the destination.
+        const clearance=destination?25:17;
+        return {x,y:lowest+clearance};
       };
-      const startX=anchorX(source,a,sourceSide,16);
+
       const target=findNode(root,targetId);
-      const endX=anchorX(target,b,targetSide,26);
-      const startY=a.y+24;
-      const endY=b.y+24;
-      const routeY=Math.max(layout.sceneH+18,startY+95,endY+95);
-      const curve=`M${startX} ${startY} `+
-        `C${startX+sourceSide*55} ${routeY} `+
-        `${endX+targetSide*55} ${routeY} ${endX} ${endY}`;
+      const start=arrowAnchor(source);
+      const end=arrowAnchor(target,true);
+      const routeY=Math.max(layout.sceneH+18,start.y+90,end.y+90);
+      const middleX=(start.x+end.x)/2;
+
+      // The arrow leaves the source downward and approaches the landing
+      // position upward, with its curve routed beneath the tree.
+      const curve=`M${start.x} ${start.y} `+
+        `C${start.x} ${start.y+65} ${start.x} ${routeY} ${middleX} ${routeY} `+
+        `C${end.x} ${routeY} ${end.x} ${end.y+65} ${end.x} ${end.y}`;
       // A thin canvas-colored outline helps arrows remain legible over branches.
       arrowGroup.append(svgEl('path',{
         d:curve,fill:'none',stroke:palette.bg,'stroke-width':6,
