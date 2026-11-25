@@ -1749,89 +1749,158 @@ function createTreeSvg(layout,comments){
   for(const e of layout.edges){
     content.append(svgEl('line',{x1:e.x1,y1:e.y1,x2:e.x2,y2:e.y2,stroke:palette.edge,'stroke-width':2,'stroke-linecap':'round'}));
   }
-  // Arrows are tied to stable node IDs and redraw with every layout update.
+  // Movement arrows use short local routes and avoid visible tree material.
+  // Multiple arrows on one node receive separate attachment points.
   const arrowGroup=svgEl('g',{'class':'movement-arrows'});
   const markerId='movement-arrowhead';
   const marker=svgEl('marker',{
     id:markerId,viewBox:'0 0 12 12',refX:10,refY:6,
-    markerWidth:8,markerHeight:8,orient:'auto-start-reverse'
+    markerWidth:7,markerHeight:7,orient:'auto-start-reverse'
   });
   marker.append(svgEl('path',{d:'M1 1 L11 6 L1 11 Z',fill:palette.selection}));
   defs.append(marker);
-  for(const source of walk(root)){
-    const a=layout.points.get(source.uid);
-    if(!a)continue;
-    for(const targetId of source.movement_arrows){
-      const b=layout.points.get(targetId);
-      if(!b)continue;
-      // Anchor each movement arrow below the selected node's visible content.
-      // For a phrase with daughters, use its lowest visible lexical material
-      // so that the arrow does not pass through the phrase's own subtree.
-      const arrowAnchor=(node,destination=false)=>{
-        let lowest=-Infinity;
-        const anchors=[];
 
-        for(const member of walk(node)){
-          const point=layout.points.get(member.uid);
-          if(!point)continue;
+  const allNodes=[...walk(root)];
+  const byId=new Map(allNodes.map(node=>[node.uid,node]));
+  const arrows=allNodes.flatMap(source=>source.movement_arrows
+    .filter(targetId=>layout.points.has(targetId))
+    .map(targetId=>({source,targetId})));
+  const outgoing=new Map(),incoming=new Map();
 
-          const terminal=layout.terminals.find(item=>
-            Math.abs(item.x-point.x)<0.01 &&
-            Math.abs(item.y-(point.y+39))<0.01
-          );
-          const triangle=layout.triangles.find(item=>
-            Math.abs(item.x-point.x)<0.01 &&
-            Math.abs(item.y-point.y)<0.01
-          );
+  for(const arrow of arrows){
+    if(!outgoing.has(arrow.source.uid))outgoing.set(arrow.source.uid,[]);
+    if(!incoming.has(arrow.targetId))incoming.set(arrow.targetId,[]);
+    outgoing.get(arrow.source.uid).push(arrow);
+    incoming.get(arrow.targetId).push(arrow);
+  }
+  for(const group of outgoing.values())group.sort((a,b)=>
+    layout.points.get(a.targetId).x-layout.points.get(b.targetId).x);
+  for(const group of incoming.values())group.sort((a,b)=>
+    layout.points.get(a.source.uid).x-layout.points.get(b.source.uid).x);
 
-          let bottom=point.y+(displayLabelParts(member).length?43:37);
-          if(triangle){
-            bottom=point.y+130;
-          }else if(terminal){
-            bottom=terminal.form?terminal.y+61:
-              terminal.parts.length?terminal.y+43:terminal.y+36;
+  const anchor=(node,isTarget,arrow)=>{
+    let lowest=-Infinity;
+    const xs=[];
+    for(const member of walk(node)){
+      const p=layout.points.get(member.uid);
+      if(!p)continue;
+      const terminal=layout.terminals.find(t=>
+        Math.abs(t.x-p.x)<0.01&&Math.abs(t.y-p.y-39)<0.01);
+      const triangle=layout.triangles.find(t=>
+        Math.abs(t.x-p.x)<0.01&&Math.abs(t.y-p.y)<0.01);
+      let bottom=p.y+(displayLabelParts(member).length?43:37);
+      if(triangle)bottom=p.y+130;
+      else if(terminal)bottom=terminal.y+(terminal.form?61:terminal.parts.length?43:36);
+      if(bottom>lowest+0.5){lowest=bottom;xs.length=0;xs.push(p.x);}
+      else if(Math.abs(bottom-lowest)<=0.5)xs.push(p.x);
+    }
+    const group=isTarget?incoming.get(node.uid):outgoing.get(node.uid);
+    const index=group.indexOf(arrow);
+    const spread=(index-(group.length-1)/2)*16;
+    const x=(Math.min(...xs)+Math.max(...xs))/2+spread;
+    return {x,y:lowest+(isTarget?19:13)};
+  };
+
+  // Rectangles protect text and triangles; segments protect tree branches.
+  const boxes=[];
+  for(const node of allNodes){
+    const p=layout.points.get(node.uid);
+    if(!p||displayLabel(node)==='EMPTY')continue;
+    const label=displayLabel(node),parts=displayLabelParts(node);
+    const font=`${node.trace?.placement==='replace-label'?'italic':'bold'} 20px Georgia`;
+    const half=textWidth(label,font)/2;
+    const suffix=parts.reduce((w,part)=>w+3+textWidth(part.text,
+      `${part.italic?'italic ':''}13px Georgia`),0);
+    boxes.push({l:p.x-half-7,r:p.x+half+suffix+7,t:p.y+7,b:p.y+41});
+  }
+  for(const t of layout.terminals){
+    const w=annotatedWidth(t.text,t.parts);
+    boxes.push({l:t.x-w/2-7,r:t.x+w/2+7,t:t.y+5,
+      b:t.y+(t.form?63:t.parts.length?44:38)});
+  }
+  for(const t of layout.triangles){
+    const half=Math.max(65,t.span/2-4);
+    boxes.push({l:t.x-half-6,r:t.x+half+6,t:t.y+47,b:t.y+131});
+  }
+
+  const cubic=(a,b,c,d,t)=>{
+    const u=1-t;
+    return {
+      x:u*u*u*a.x+3*u*u*t*b.x+3*u*t*t*c.x+t*t*t*d.x,
+      y:u*u*u*a.y+3*u*u*t*b.y+3*u*t*t*c.y+t*t*t*d.y
+    };
+  };
+  const distanceToBranch=(p,e)=>{
+    const dx=e.x2-e.x1,dy=e.y2-e.y1;
+    const t=Math.max(0,Math.min(1,((p.x-e.x1)*dx+(p.y-e.y1)*dy)/(dx*dx+dy*dy||1)));
+    return Math.hypot(p.x-e.x1-t*dx,p.y-e.y1-t*dy);
+  };
+  const previous=[];
+
+  // Route short arrows first; later arrows avoid their paths where possible.
+  arrows.sort((a,b)=>{
+    const ap=layout.points.get(a.source.uid),aq=layout.points.get(a.targetId);
+    const bp=layout.points.get(b.source.uid),bq=layout.points.get(b.targetId);
+    return Math.hypot(ap.x-aq.x,ap.y-aq.y)-Math.hypot(bp.x-bq.x,bp.y-bq.y);
+  });
+  for(const arrow of arrows){
+    const target=byId.get(arrow.targetId);
+    if(!target)continue;
+    const start=anchor(arrow.source,false,arrow);
+    const end=anchor(target,true,arrow);
+    const base=Math.max(start.y,end.y)+22;
+    let best=null;
+
+    for(const side of [0,-45,45,-90,90]){
+      for(let level=0;level<10;level++){
+        const lane=base+level*23;
+        const mid=(start.x+end.x)/2+side;
+        const a={x:start.x,y:start.y};
+        const b={x:start.x,y:start.y+22};
+        const c={x:mid,y:lane};
+        const d={x:mid,y:lane};
+        const e={x:end.x+side,y:lane};
+        const f={x:end.x,y:end.y};
+        const points=[];
+        for(let i=0;i<=20;i++)points.push(cubic(a,b,c,d,i/20));
+        for(let i=1;i<=20;i++)points.push(cubic(d,e,{x:end.x+side,y:end.y+24},f,i/20));
+        let collision=0,overlap=0;
+        for(let i=1;i<points.length-1;i++){
+          const p=points[i];
+          for(const box of boxes){
+            if(p.x>=box.l&&p.x<=box.r&&p.y>=box.t&&p.y<=box.b)collision++;
           }
-
-          // Keep every item at the lowest displayed level. A multi-word
-          // constituent will attach below the center of its bottom row.
-          if(bottom>lowest+0.5){
-            lowest=bottom;
-            anchors.length=0;
-            anchors.push(point.x);
-          }else if(Math.abs(bottom-lowest)<=0.5){
-            anchors.push(point.x);
+          for(const edge of layout.edges){
+            if(p.x<Math.min(edge.x1,edge.x2)-10||p.x>Math.max(edge.x1,edge.x2)+10||
+               p.y<Math.min(edge.y1,edge.y2)-10||p.y>Math.max(edge.y1,edge.y2)+10)continue;
+            if(distanceToBranch(p,edge)<8)collision++;
+          }
+          if(i>3&&i<points.length-4){
+            for(const path of previous){
+              if(path.some(q=>Math.abs(q.x-p.x)<7&&Math.abs(q.y-p.y)<7))overlap++;
+            }
           }
         }
-
-        const x=anchors.length?
-          (Math.min(...anchors)+Math.max(...anchors))/2:
-          layout.points.get(node.uid).x;
-        // Leave more space for the arrowhead at the destination.
-        const clearance=destination?25:17;
-        return {x,y:lowest+clearance};
-      };
-
-      const target=findNode(root,targetId);
-      const start=arrowAnchor(source);
-      const end=arrowAnchor(target,true);
-      const routeY=Math.max(layout.sceneH+18,start.y+90,end.y+90);
-      const middleX=(start.x+end.x)/2;
-
-      // The arrow leaves the source downward and approaches the landing
-      // position upward, with its curve routed beneath the tree.
-      const curve=`M${start.x} ${start.y} `+
-        `C${start.x} ${start.y+65} ${start.x} ${routeY} ${middleX} ${routeY} `+
-        `C${end.x} ${routeY} ${end.x} ${end.y+65} ${end.x} ${end.y}`;
-      // A thin canvas-colored outline helps arrows remain legible over branches.
-      arrowGroup.append(svgEl('path',{
-        d:curve,fill:'none',stroke:palette.bg,'stroke-width':6,
-        'stroke-linecap':'round','stroke-linejoin':'round'
-      }));
-      arrowGroup.append(svgEl('path',{
-        d:curve,fill:'none',stroke:palette.selection,'stroke-width':2.4,
-        'stroke-linecap':'round','marker-end':`url(#${markerId})`
-      }));
+        const score=collision*160+overlap*16+level*15+Math.abs(side)*0.3;
+        if(!best||score<best.score){
+          best={score,points,lane,mid,side,start,end};
+        }
+        if(score===0)break;
+      }
     }
+    const {lane,mid,side}=best;
+    const path=`M${start.x} ${start.y} `+
+      `C${start.x} ${start.y+22} ${mid} ${lane} ${mid} ${lane} `+
+      `C${end.x+side} ${lane} ${end.x+side} ${end.y+24} ${end.x} ${end.y}`;
+    previous.push(best.points);
+    arrowGroup.append(svgEl('path',{
+      d:path,fill:'none',stroke:palette.bg,'stroke-width':4.5,
+      'stroke-linecap':'round','stroke-linejoin':'round'
+    }));
+    arrowGroup.append(svgEl('path',{
+      d:path,fill:'none',stroke:palette.selection,'stroke-width':2,
+      'stroke-linecap':'round','marker-end':`url(#${markerId})`
+    }));
   }
   content.append(arrowGroup);
   for(const n of walk(root)){
