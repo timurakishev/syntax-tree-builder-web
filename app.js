@@ -1851,21 +1851,47 @@ function createTreeSvg(layout,comments){
     for(let i=1;i<=count;i++)points.push(mix(a,b,i/count));
   };
   const xy=p=>`${p.x} ${p.y}`;
-  const rounded=(vertices,limit=36)=>{
+  const smoothRoute=(vertices,bow=18,side=1,cut=0.18)=>{
     const clean=vertices.filter((p,i)=>!i||dist(p,vertices[i-1])>0.01);
-    const points=[clean[0]];
-    let d=`M${xy(clean[0])}`,last=clean[0];
-    for(let i=1;i<clean.length-1;i++){
-      const a=clean[i-1],b=clean[i],c=clean[i+1];
-      const radius=Math.min(limit,dist(a,b)*0.45,dist(b,c)*0.45);
-      const before=mix(b,a,radius/dist(a,b));
-      const after=mix(b,c,radius/dist(b,c));
-      d+=` L${xy(before)} Q${xy(b)} ${xy(after)}`;
-      line(points,last,before);sample(points,before,b,after);
-      last=after;
+    if(clean.length<2)return {d:`M${xy(clean[0])}`,points:clean};
+    const corners=clean.map((p,i)=>{
+      if(!i||i===clean.length-1)return p;
+      const a=clean[i-1],b=clean[i+1];
+      const trim=Math.min(34,dist(a,p)*cut,dist(p,b)*cut);
+      return mix(mix(p,a,trim/dist(p,a)),mix(p,b,trim/dist(p,b)),0.5);
+    });
+    const knots=[corners[0]];
+    for(let i=1;i<corners.length;i++){
+      const a=corners[i-1],b=corners[i],len=dist(a,b);
+      if(len>45||corners.length===2){
+        const mid=mix(a,b,0.5);
+        const offset=Math.min(bow,len*0.16)*side;
+        knots.push({x:mid.x-(b.y-a.y)*offset/len,
+          y:mid.y+(b.x-a.x)*offset/len});
+      }
+      knots.push(b);
     }
-    const end=clean[clean.length-1];
-    d+=` L${xy(end)}`;line(points,last,end);
+    const unit=(a,b)=>{
+      const len=dist(a,b)||1;
+      return {x:(b.x-a.x)/len,y:(b.y-a.y)/len};
+    };
+    const tangents=knots.map((p,i)=>{
+      if(!i)return unit(p,knots[1]);
+      if(i===knots.length-1)return unit(knots[i-1],p);
+      const a=unit(knots[i-1],p),b=unit(p,knots[i+1]);
+      const len=Math.hypot(a.x+b.x,a.y+b.y);
+      return len>0.001?{x:(a.x+b.x)/len,y:(a.y+b.y)/len}:b;
+    });
+    const points=[knots[0]];
+    let d=`M${xy(knots[0])}`;
+    for(let i=1;i<knots.length;i++){
+      const a=knots[i-1],b=knots[i],len=dist(a,b);
+      const h=len/3,u=tangents[i-1],v=tangents[i];
+      const c1={x:a.x+u.x*h,y:a.y+u.y*h};
+      const c2={x:b.x-v.x*h,y:b.y-v.y*h};
+      d+=` C${xy(c1)} ${xy(c2)} ${xy(b)}`;
+      sample(points,a,c1,c2,b);
+    }
     return {d,points};
   };
 
@@ -1924,21 +1950,43 @@ function createTreeSvg(layout,comments){
         return !points.some(blocked);
       };
       const consider=route=>{
-        let hits=0,crossings=0,length=0;
+        let hits=0,crossings=0,length=0,drop=0,curvature=0;
+        const chord=dist(start,end)||1;
         for(let i=0;i<route.points.length;i++){
           const p=route.points[i];
           if(i)length+=dist(p,route.points[i-1]);
+          drop=Math.max(drop,p.y-Math.max(start.y,end.y));
+          curvature=Math.max(curvature,Math.abs((end.x-start.x)*(p.y-start.y)-
+            (end.y-start.y)*(p.x-start.x))/chord);
           hits+=obstaclesAt(p);
           if(nearArrow(p,end,empty))crossings++;
         }
         // A clear route always wins over any route with a detected collision.
-        const score=[hits?1:0,hits,crossings?1:0,crossings,length];
+        const desiredBow=Math.min(48,Math.max(10,chord*0.12));
+        const shapeCost=length+drop*2.5+Math.max(0,desiredBow-curvature)*2.5;
+        const score=[hits?1:0,hits,crossings?1:0,crossings,shapeCost];
         const better=!best||score.some((v,i)=>v<best.score[i]&&
           score.slice(0,i).every((n,j)=>n===best.score[j]));
         if(better)best={...route,score};
       };
       const dx=end.x-start.x;
       const span=dist(start,end);
+      // Try sweeping curves that leave the source sideways and rise to the target.
+      const dy=end.y-start.y;
+      const sign=Math.sign(dx)||1;
+      for(const side of [sign,-sign]){
+        for(const reach of [0.45,0.7,0.95,1.15]){
+          for(const lift of [0.22,0.45,0.65]){
+            for(const offset of [0,24,48]){
+              const b={x:start.x+side*Math.max(28,Math.abs(dx)*reach),
+                y:start.y+8};
+              const c={x:end.x+side*offset,y:end.y-dy*lift};
+              const points=[start];sample(points,start,b,c,end);
+              consider({d:`M${xy(start)} C${xy(b)} ${xy(c)} ${xy(end)}`,points});
+            }
+          }
+        }
+      }
       // First try compact, continuously curved paths (no cusp at the midpoint).
       for(const bend of [0,-30,30,-65,65,-120,120,-190,190]){
         if(Math.abs(dx)<10&&!bend)continue;
@@ -2017,8 +2065,14 @@ function createTreeSvg(layout,comments){
               while(b>a+1&&!clearSegment(path[a],path[b]))b--;
               simplified.push(path[b]);a=b;
             }
-            for(const radius of [36,22,12,6,2,0]){
-              consider(rounded(simplified,radius));
+            for(const vertices of [simplified,path]){
+              for(const cut of [0.30,0.12,0]){
+                for(const bow of [24,14,7,2]){
+                  for(const side of [-1,1]){
+                    consider(smoothRoute(vertices,bow,side,cut));
+                  }
+                }
+              }
               if(!best.score[0]&&!best.score[2])break;
             }
             break;
