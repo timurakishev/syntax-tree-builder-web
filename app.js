@@ -401,10 +401,20 @@ function updateSelection(){
 function checkpoint(){undoStack.push(clone(root));if(undoStack.length>80)undoStack.shift();redoStack=[];}
 function removeBrokenMovementArrows(){
   const nodes=[...walk(root)];
-  const ids=new Set(nodes.map(node=>node.uid));
+  const nodesById=new Map(nodes.map(node=>[node.uid,node]));
   const chains=new Map();
+
   for(const node of nodes){
-    node.movement_arrows=node.movement_arrows.filter(id=>id!==node.uid&&ids.has(id));
+    node.movement_arrows=node.movement_arrows.filter(id=>{
+      const target=nodesById.get(id);
+
+      if(!target||id===node.uid||node.label==='EMPTY')return false;
+
+      const bothHeads=isHead(node.label)&&isHead(target.label);
+      const bothPhrases=isPhrase(node.label)&&isPhrase(target.label);
+
+      return bothHeads||bothPhrases;
+    });
     if(node.movement_chain_id){
       const members=chains.get(node.movement_chain_id)??[];
       members.push(node);
@@ -1003,6 +1013,11 @@ async function finishMovement(destinationUid){
   if(!source||!destination){pendingMovement=null;return true;}
   if(source.uid===destination.uid){
     setInfo('Choose a different destination node. Press Escape to cancel.',10000);
+    return true;
+  }
+
+  if(destination.label==='EMPTY'&&!isPhrase(source.label)){
+    setInfo('Only a phrase can move into an empty specifier.',10000);
     return true;
   }
 
