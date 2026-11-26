@@ -1749,7 +1749,7 @@ function createTreeSvg(layout,comments){
   for(const e of layout.edges){
     content.append(svgEl('line',{x1:e.x1,y1:e.y1,x2:e.x2,y2:e.y2,stroke:palette.edge,'stroke-width':2,'stroke-linecap':'round'}));
   }
-  // Rounded movement arrows with shared attachment slots and obstacle checks.
+  // Independent, single-arc movement arrows.
   const arrowGroup=svgEl('g',{'class':'movement-arrows','pointer-events':'none'});
   const markerId='movement-arrowhead';
   const marker=svgEl('marker',{
@@ -1764,18 +1764,6 @@ function createTreeSvg(layout,comments){
   const arrows=allNodes.flatMap(source=>source.movement_arrows
     .filter(targetId=>layout.points.has(targetId))
     .map(targetId=>({source,targetId})));
-  const slots=new Map();
-  const addSlot=(id,otherId,arrow)=>{
-    if(!slots.has(id))slots.set(id,[]);
-    slots.get(id).push({arrow,other:layout.points.get(otherId)});
-  };
-  for(const arrow of arrows){
-    addSlot(arrow.source.uid,arrow.targetId,arrow);
-    addSlot(arrow.targetId,arrow.source.uid,arrow);
-  }
-  for(const group of slots.values())group.sort((a,b)=>
-    a.other.x-b.other.x||a.other.y-b.other.y);
-
   const boxes=[];
   const bottoms=new Map();
   for(const node of allNodes){
@@ -1806,7 +1794,7 @@ function createTreeSvg(layout,comments){
   for(const c of comments){
     boxes.push({l:c.x-8,r:c.x+c.w+8,t:c.y-8,b:c.y+c.h+8});
   }
-  const anchor=(node,isTarget,arrow)=>{
+  const anchor=(node,isTarget)=>{
     const p=layout.points.get(node.uid);
     if(isTarget&&displayLabel(node)==='EMPTY')return {x:p.x,y:p.y+23.5};
     let lowest=-Infinity;
@@ -1823,10 +1811,7 @@ function createTreeSvg(layout,comments){
       if(bottom>lowest+0.5){lowest=bottom;xs.length=0;xs.push(q.x);}
       else if(Math.abs(bottom-lowest)<=0.5)xs.push(q.x);
     }
-    const group=slots.get(node.uid);
-    const index=group.findIndex(slot=>slot.arrow===arrow);
-    const spread=(index-(group.length-1)/2)*20;
-    return {x:(Math.min(...xs)+Math.max(...xs))/2+spread,y:lowest+8};
+    return {x:(Math.min(...xs)+Math.max(...xs))/2,y:lowest+8};
   };
 
   const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
@@ -1846,274 +1831,74 @@ function createTreeSvg(layout,comments){
       points.push(d?mix(p,mix(mix(b,c,t),mix(c,d,t),t),t):p);
     }
   };
-  const line=(points,a,b)=>{
-    const count=Math.max(1,Math.ceil(dist(a,b)/3));
-    for(let i=1;i<=count;i++)points.push(mix(a,b,i/count));
-  };
   const xy=p=>`${p.x} ${p.y}`;
-  const smoothRoute=(vertices,bow=18,side=1,cut=0.18)=>{
-    const clean=vertices.filter((p,i)=>!i||dist(p,vertices[i-1])>0.01);
-    if(clean.length<2)return {d:`M${xy(clean[0])}`,points:clean};
-    const corners=clean.map((p,i)=>{
-      if(!i||i===clean.length-1)return p;
-      const a=clean[i-1],b=clean[i+1];
-      const trim=Math.min(34,dist(a,p)*cut,dist(p,b)*cut);
-      return mix(mix(p,a,trim/dist(p,a)),mix(p,b,trim/dist(p,b)),0.5);
-    });
-    const knots=[corners[0]];
-    for(let i=1;i<corners.length;i++){
-      const a=corners[i-1],b=corners[i],len=dist(a,b);
-      if(len>45||corners.length===2){
-        const mid=mix(a,b,0.5);
-        const offset=Math.min(bow,len*0.16)*side;
-        knots.push({x:mid.x-(b.y-a.y)*offset/len,
-          y:mid.y+(b.x-a.x)*offset/len});
-      }
-      knots.push(b);
-    }
-    const unit=(a,b)=>{
-      const len=dist(a,b)||1;
-      return {x:(b.x-a.x)/len,y:(b.y-a.y)/len};
-    };
-    const tangents=knots.map((p,i)=>{
-      if(!i)return unit(p,knots[1]);
-      if(i===knots.length-1)return unit(knots[i-1],p);
-      const a=unit(knots[i-1],p),b=unit(p,knots[i+1]);
-      const len=Math.hypot(a.x+b.x,a.y+b.y);
-      return len>0.001?{x:(a.x+b.x)/len,y:(a.y+b.y)/len}:b;
-    });
-    const points=[knots[0]];
-    let d=`M${xy(knots[0])}`;
-    for(let i=1;i<knots.length;i++){
-      const a=knots[i-1],b=knots[i],len=dist(a,b);
-      const h=len/3,u=tangents[i-1],v=tangents[i];
-      const c1={x:a.x+u.x*h,y:a.y+u.y*h};
-      const c2={x:b.x-v.x*h,y:b.y-v.y*h};
-      d+=` C${xy(c1)} ${xy(c2)} ${xy(b)}`;
-      sample(points,a,c1,c2,b);
-    }
-    return {d,points};
-  };
 
-  // A spatial index keeps checks against earlier arrows local and inexpensive.
-  const cell=14,occupied=new Map();
-  const key=(x,y)=>`${x},${y}`;
-  const remember=(route,end,empty)=>{
-    for(const p of route.points){
-      const k=key(Math.floor(p.x/cell),Math.floor(p.y/cell));
-      if(!occupied.has(k))occupied.set(k,[]);
-      occupied.get(k).push({p,end,empty});
+  // Every candidate is a single convex cubic. The two controls are
+  // on the same side of the chord, in increasing chord order.
+  // This rules out S-bends, corners and grid-based detours.
+  for(const arrow of arrows){
+    const target=byId.get(arrow.targetId);
+    const start=anchor(arrow.source,false),end=anchor(target,true);
+    const empty=displayLabel(target)==='EMPTY';
+    const dx=end.x-start.x,dy=end.y-start.y;
+    const span=Math.hypot(dx,dy);
+    if(span<0.01)continue;
+
+    const normal={x:-dy/span,y:dx/span};
+    // Prefer the side that bows downward/outward from the tree.
+    const preferred=normal.y>0?1:normal.y<0?-1:
+      (normal.x<0?1:-1);
+    const desired=Math.min(64,Math.max(15,span*0.15));
+    const maxDrop=Math.min(64,Math.max(20,span*0.15));
+    const limit=Math.min(380,Math.max(desired*2,span*1.1));
+    const bows=[...new Set([desired,desired*0.75,desired*0.5,
+      ...Array.from({length:Math.ceil(limit/12)},(_,i)=>Math.min(limit,12*(i+1)))])];
+    let best=null;
+
+    const hitsAt=p=>{
+      if(p.x<minX+10||p.x>maxRight-10||p.y<minY+10||p.y>maxBottom-10)return 100;
+      let hits=0;
+      if(boxes.some(box=>{
+        if(empty&&box.id===target.uid&&dist(p,end)<38)return false;
+        return p.x>=box.l&&p.x<=box.r&&p.y>=box.t&&p.y<=box.b;
+      }))hits+=3;
+      if(layout.edges.some(e=>p.x>=Math.min(e.x1,e.x2)-6&&p.x<=Math.max(e.x1,e.x2)+6&&
+        p.y>=Math.min(e.y1,e.y2)-6&&p.y<=Math.max(e.y1,e.y2)+6&&distanceToBranch(p,e)<6))hits++;
+      return hits;
+    };
+
+    for(const side of [preferred,-preferred]){
+      for(const bow of bows){
+        for(const lead of [0.10,0.25,0.40]){
+          const b={x:start.x+dx*lead+normal.x*bow*side,
+            y:start.y+dy*lead+normal.y*bow*side};
+          const c={x:end.x-dx*lead+normal.x*bow*side,
+            y:end.y-dy*lead+normal.y*bow*side};
+          const points=[start];sample(points,start,b,c,end);
+          let hits=0,length=0,drop=0;
+          for(let i=0;i<points.length;i++){
+            const p=points[i];
+            hits+=hitsAt(p);
+            if(i)length+=dist(p,points[i-1]);
+            drop=Math.max(drop,p.y-Math.max(start.y,end.y));
+          }
+          // A compact arc is more important than an elaborate detour.
+          // Prefer clear routes within the drop budget; if none exists,
+          // keep the arc compact and minimize unavoidable intersections.
+          const excess=Math.max(0,drop-maxDrop);
+          const shape=length-span+drop*1.6+Math.abs(bow-desired)*0.9+
+            (side===preferred?0:20)+Math.abs(lead-0.25)*12;
+          const score=[excess>0.01?1:0,hits,excess,shape];
+          if(!best||score.some((v,i)=>v<best.score[i]&&
+            score.slice(0,i).every((n,j)=>n===best.score[j]))){
+            best={d:`M${xy(start)} C${xy(b)} ${xy(c)} ${xy(end)}`,score};
+          }
+        }
+      }
     }
-  };
-  const nearArrow=(p,end,empty)=>{
-    const x=Math.floor(p.x/cell),y=Math.floor(p.y/cell);
-    for(let dx=-1;dx<=1;dx++)for(let dy=-1;dy<=1;dy++){
-      for(const q of occupied.get(key(x+dx,y+dy))||[]){
-        if(empty&&q.empty&&dist(end,q.end)<0.01&&
-          dist(p,end)<19&&dist(q.p,end)<19)continue;
-        if(dist(p,q.p)<12)return true;
-      }
-    }
-    return false;
-  };
-  const arrowLength=a=>dist(layout.points.get(a.source.uid),layout.points.get(a.targetId));
-  const shortest=[...arrows].sort((a,b)=>arrowLength(a)-arrowLength(b));
-  const longest=[...shortest].reverse();
-  const alternating=[];
-  for(let i=0,j=shortest.length-1;i<=j;i++,j--){
-    alternating.push(shortest[i]);
-    if(i<j)alternating.push(shortest[j]);
-  }
-  const routeAll=order=>{
-    occupied.clear();
-    const routes=[];
-    const total=[0,0,0];
-    for(const arrow of order){
-      const target=byId.get(arrow.targetId);
-      const start=anchor(arrow.source,false,arrow),end=anchor(target,true,arrow);
-      const empty=displayLabel(target)==='EMPTY';
-      let best=null;
-      const obstaclesAt=p=>{
-        if(p.x<minX+12||p.x>maxRight-12||p.y<minY+12||p.y>maxBottom-12)return 100;
-        let hits=0;
-        if(boxes.some(box=>{
-          if(empty&&box.id===target.uid&&dist(p,end)<38)return false;
-          return p.x>=box.l&&p.x<=box.r&&p.y>=box.t&&p.y<=box.b;
-        }))hits++;
-        if(layout.edges.some(e=>p.x>=Math.min(e.x1,e.x2)-7&&p.x<=Math.max(e.x1,e.x2)+7&&
-          p.y>=Math.min(e.y1,e.y2)-7&&p.y<=Math.max(e.y1,e.y2)+7&&distanceToBranch(p,e)<7))hits++;
-        return hits;
-      };
-      const blocked=p=>obstaclesAt(p)>0||nearArrow(p,end,empty);
-      const clearSegment=(a,b)=>{
-        const points=[a];line(points,a,b);
-        return !points.some(blocked);
-      };
-      const consider=route=>{
-        let hits=0,crossings=0,length=0,drop=0,curvature=0;
-        const chord=dist(start,end)||1;
-        for(let i=0;i<route.points.length;i++){
-          const p=route.points[i];
-          if(i)length+=dist(p,route.points[i-1]);
-          drop=Math.max(drop,p.y-Math.max(start.y,end.y));
-          curvature=Math.max(curvature,Math.abs((end.x-start.x)*(p.y-start.y)-
-            (end.y-start.y)*(p.x-start.x))/chord);
-          hits+=obstaclesAt(p);
-          if(nearArrow(p,end,empty))crossings++;
-        }
-        // A clear route always wins over any route with a detected collision.
-        const desiredBow=Math.min(48,Math.max(10,chord*0.12));
-        const shapeCost=length+drop*2.5+Math.max(0,desiredBow-curvature)*2.5;
-        const score=[hits?1:0,hits,crossings?1:0,crossings,shapeCost];
-        const better=!best||score.some((v,i)=>v<best.score[i]&&
-          score.slice(0,i).every((n,j)=>n===best.score[j]));
-        if(better)best={...route,score};
-      };
-      const dx=end.x-start.x;
-      const span=dist(start,end);
-      // Try sweeping curves that leave the source sideways and rise to the target.
-      const dy=end.y-start.y;
-      const sign=Math.sign(dx)||1;
-      for(const side of [sign,-sign]){
-        for(const reach of [0.45,0.7,0.95,1.15]){
-          for(const lift of [0.22,0.45,0.65]){
-            for(const offset of [0,24,48]){
-              const b={x:start.x+side*Math.max(28,Math.abs(dx)*reach),
-                y:start.y+8};
-              const c={x:end.x+side*offset,y:end.y-dy*lift};
-              const points=[start];sample(points,start,b,c,end);
-              consider({d:`M${xy(start)} C${xy(b)} ${xy(c)} ${xy(end)}`,points});
-            }
-          }
-        }
-      }
-      // First try compact, continuously curved paths (no cusp at the midpoint).
-      for(const bend of [0,-30,30,-65,65,-120,120,-190,190]){
-        if(Math.abs(dx)<10&&!bend)continue;
-        for(const drop of [12,30,55,90]){
-          for(const approach of [bend,bend*0.35,-bend]){
-            const b={x:start.x+dx*0.18+bend,y:start.y+drop};
-            const c={x:end.x-dx*0.18+approach,y:end.y+drop+Math.min(35,span*0.08)};
-            const points=[start];sample(points,start,b,c,end);
-            consider({d:`M${xy(start)} C${xy(b)} ${xy(c)} ${xy(end)}`,points});
-          }
-        }
-      }
-      if(best.score[0]||best.score[2]){
-        for(const sx of [-180,-100,-55,-28,28,55,100,180]){
-          for(const ex of [-180,-100,-55,-28,0,28,55,100,180]){
-            for(const sy of [0,20,55]){
-              const b={x:start.x+sx,y:start.y+sy};
-              const c={x:end.x+ex,y:end.y+28};
-              const points=[start];sample(points,start,b,c,end);
-              consider({d:`M${xy(start)} C${xy(b)} ${xy(c)} ${xy(end)}`,points});
-            }
-          }
-        }
-      }
-      // Search the free space only if the compact curves were blocked.
-      if(best.score[0]||best.score[2]){
-        const step=12;
-        const axis=(a,b,lo,hi)=>{
-          const values=[a,b];
-          for(let v=lo+18;v<hi-12;v+=step)values.push(v);
-          return [...new Set(values)].sort((a,b)=>a-b);
-        };
-        const xs=axis(start.x,end.x,minX,maxRight);
-        const ys=axis(start.y,end.y,minY,maxBottom);
-        const width=xs.length;
-        const id=(x,y)=>y*width+x;
-        const at=i=>({x:xs[i%width],y:ys[Math.floor(i/width)]});
-        const first=id(xs.indexOf(start.x),ys.indexOf(start.y));
-        const last=id(xs.indexOf(end.x),ys.indexOf(end.y));
-        const cost=new Map([[first,0]]),parent=new Map(),closed=new Set();
-        const heap=[];
-        const push=item=>{
-          let i=heap.length;heap.push(item);
-          while(i){
-            const p=(i-1)>>1;
-            if(heap[p].f<=item.f)break;
-            heap[i]=heap[p];i=p;
-          }
-          heap[i]=item;
-        };
-        const pop=()=>{
-          const top=heap[0],item=heap.pop();
-          if(heap.length){
-            let i=0;
-            while(i*2+1<heap.length){
-              let c=i*2+1;
-              if(c+1<heap.length&&heap[c+1].f<heap[c].f)c++;
-              if(heap[c].f>=item.f)break;
-              heap[i]=heap[c];i=c;
-            }
-            heap[i]=item;
-          }
-          return top;
-        };
-        if(!blocked(start)&&!blocked(end))push({id:first,f:dist(start,end)});
-        while(heap.length&&closed.size<45000){
-          const current=pop().id;
-          if(closed.has(current))continue;
-          if(current===last){
-            const path=[end];let i=last;
-            while(i!==first){i=parent.get(i);path.push(at(i));}
-            path.reverse();
-            const simplified=[path[0]];
-            for(let a=0;a<path.length-1;){
-              let b=path.length-1;
-              while(b>a+1&&!clearSegment(path[a],path[b]))b--;
-              simplified.push(path[b]);a=b;
-            }
-            for(const vertices of [simplified,path]){
-              for(const cut of [0.30,0.12,0]){
-                for(const bow of [24,14,7,2]){
-                  for(const side of [-1,1]){
-                    consider(smoothRoute(vertices,bow,side,cut));
-                  }
-                }
-              }
-              if(!best.score[0]&&!best.score[2])break;
-            }
-            break;
-          }
-          closed.add(current);
-          const x=current%width,y=Math.floor(current/width),a=at(current);
-          for(let dx=-1;dx<=1;dx++)for(let dy=-1;dy<=1;dy++){
-            if(!dx&&!dy)continue;
-            const nx=x+dx,ny=y+dy;
-            if(nx<0||ny<0||nx>=width||ny>=ys.length)continue;
-            const next=id(nx,ny),b=at(next);
-            if(closed.has(next))continue;
-            const g=cost.get(current)+dist(a,b);
-            if(g>=(cost.get(next)??Infinity)||!clearSegment(a,b))continue;
-            cost.set(next,g);parent.set(next,current);
-            push({id:next,f:g+dist(b,end)});
-          }
-        }
-      }
-      remember(best,end,empty);
-      routes.push(best);
-      total[0]+=best.score[1];
-      total[1]+=best.score[3];
-      total[2]+=best.score[4];
-    }
-    return {routes,total};
-  };
-  let result=routeAll(shortest);
-  // A different drawing order may leave a clearer corridor for a long arrow.
-  if((result.total[0]||result.total[1])&&arrows.length>1){
-    const alternatives=arrows.length<=12?[longest,alternating]:[longest];
-    for(const order of alternatives){
-      const next=routeAll(order);
-      if(next.total.some((v,i)=>v<result.total[i]&&
-        next.total.slice(0,i).every((n,j)=>n===result.total[j])))result=next;
-      if(!result.total[0]&&!result.total[1])break;
-    }
-  }
-  for(const route of result.routes){
-    arrowGroup.append(svgEl('path',{
-      d:route.d,fill:'none',stroke:palette.selection,'stroke-width':2,
+
+    if(best)arrowGroup.append(svgEl('path',{
+      d:best.d,fill:'none',stroke:palette.selection,'stroke-width':2,
       'stroke-linecap':'round','stroke-linejoin':'round',
       'marker-end':`url(#${markerId})`
     }));
