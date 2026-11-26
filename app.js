@@ -1965,7 +1965,7 @@ function createTreeSvg(layout,comments){
       d:path,
       fill:'none',
       stroke:palette.selection,
-      'stroke-width':2,
+      'stroke-width':1.7,
       'stroke-linecap':'round',
       'stroke-linejoin':'round',
       'marker-end':`url(#${markerId})`
