@@ -1724,6 +1724,18 @@ function getTreePalette(){
     commentTitle:get('--tree-comment-title','#35639b')
   };
 }
+function applyZoom(){
+  const svg=$('treeSvg');
+  if(!svg)return;
+  svg.setAttribute('width',String(sceneWidth*zoom));
+  svg.setAttribute('height',String(sceneHeight*zoom));
+  svg.style.width=(sceneWidth*zoom)+'px';
+  svg.style.height=(sceneHeight*zoom)+'px';
+  const stage=$('treeStage');
+  stage.style.width=`${Math.max(sceneWidth*zoom,$('scrollCanvas').clientWidth)}px`;
+  stage.style.height=`${Math.max(sceneHeight*zoom,$('scrollCanvas').clientHeight)}px`;
+  svg.style.margin='auto';
+}
 function createTreeSvg(layout,comments){
   const palette=getTreePalette();
   const svg=$('treeSvg');svg.replaceChildren();
@@ -1736,11 +1748,7 @@ function createTreeSvg(layout,comments){
   const offsetX=-minX,offsetY=-minY;
   sceneWidth=Math.max(1,maxRight-minX);sceneHeight=Math.max(1,maxBottom-minY);
   svg.setAttribute('viewBox',`0 0 ${sceneWidth} ${sceneHeight}`);
-  svg.setAttribute('width',String(sceneWidth*zoom));svg.setAttribute('height',String(sceneHeight*zoom));
-  svg.style.width=(sceneWidth*zoom)+'px';svg.style.height=(sceneHeight*zoom)+'px';
-  const stage=$('treeStage');stage.style.width=`${Math.max(sceneWidth*zoom,$('scrollCanvas').clientWidth)}px`;
-  stage.style.height=`${Math.max(sceneHeight*zoom,$('scrollCanvas').clientHeight)}px`;
-  svg.style.margin='auto';
+  applyZoom();
   const defs=svgEl('defs');const dots=svgEl('pattern',{id:'dots',width:24,height:24,patternUnits:'userSpaceOnUse'});
   dots.append(svgEl('circle',{cx:0,cy:0,r:.75,fill:palette.dots}));defs.append(dots);svg.append(defs);
   svg.append(svgEl('rect',{width:sceneWidth,height:sceneHeight,fill:palette.bg}));
@@ -1749,12 +1757,13 @@ function createTreeSvg(layout,comments){
   for(const e of layout.edges){
     content.append(svgEl('line',{x1:e.x1,y1:e.y1,x2:e.x2,y2:e.y2,stroke:palette.edge,'stroke-width':2,'stroke-linecap':'round'}));
   }
-  // Independent, single-arc movement arrows.
-  const arrowGroup=svgEl('g',{'class':'movement-arrows','pointer-events':'none'});
+  // Rounded movement arrows. Each arrow is routed independently so new arrows do not distort older ones.
+  // The renderer tests only a small number of smooth cubic curves, which keeps editing responsive.
+  const arrowGroup=svgEl('g',{'class':'movement-arrows'});
   const markerId='movement-arrowhead';
   const marker=svgEl('marker',{
-    id:markerId,viewBox:'0 0 12 12',refX:11,refY:6,
-    markerWidth:7,markerHeight:7,orient:'auto'
+    id:markerId,viewBox:'0 0 12 12',refX:10.4,refY:6,
+    markerWidth:7,markerHeight:7,orient:'auto-start-reverse'
   });
   marker.append(svgEl('path',{d:'M1 1 L11 6 L1 11 Z',fill:palette.selection}));
   defs.append(marker);
@@ -1764,142 +1773,195 @@ function createTreeSvg(layout,comments){
   const arrows=allNodes.flatMap(source=>source.movement_arrows
     .filter(targetId=>layout.points.has(targetId))
     .map(targetId=>({source,targetId})));
+
+  const anchor=(node,isTarget)=>{
+    const p=layout.points.get(node.uid);
+    if(!p)return null;
+    if(isTarget&&displayLabel(node)==='EMPTY')return {x:p.x,y:p.y+23.5};
+
+    let lowest=-Infinity;
+    const xs=[];
+
+    for(const member of walk(node)){
+      const q=layout.points.get(member.uid);
+      if(!q)continue;
+
+      const terminal=layout.terminals.find(t=>
+        Math.abs(t.x-q.x)<0.01&&Math.abs(t.y-q.y-39)<0.01);
+      const triangle=layout.triangles.find(t=>
+        Math.abs(t.x-q.x)<0.01&&Math.abs(t.y-q.y)<0.01);
+
+      let bottom=q.y+(displayLabelParts(member).length?43:37);
+
+      if(triangle)bottom=q.y+130;
+      else if(terminal)bottom=terminal.y+(terminal.form?61:terminal.parts.length?43:36);
+
+      if(bottom>lowest+0.5){
+        lowest=bottom;
+        xs.length=0;
+        xs.push(q.x);
+      }else if(Math.abs(bottom-lowest)<=0.5){
+        xs.push(q.x);
+      }
+    }
+
+    return {
+      x:(Math.min(...xs)+Math.max(...xs))/2,
+      y:lowest+(isTarget?17:11)
+    };
+  };
+
   const boxes=[];
-  const bottoms=new Map();
+
   for(const node of allNodes){
     const p=layout.points.get(node.uid);
+    if(!p||displayLabel(node)==='EMPTY')continue;
+
     const label=displayLabel(node),parts=displayLabelParts(node);
     const font=`${node.trace?.placement==='replace-label'?'italic':'bold'} 20px Georgia`;
     const half=textWidth(label,font)/2;
     const suffix=parts.reduce((w,part)=>w+3+textWidth(part.text,
       `${part.italic?'italic ':''}13px Georgia`),0);
-    const empty=label==='EMPTY';
-    const bottom=p.y+(empty?47:parts.length?42:36);
-    bottoms.set(node.uid,bottom);
-    boxes.push({id:node.uid,l:empty?p.x-28:p.x-half-6,
-      r:empty?p.x+28:p.x+half+suffix+6,t:p.y+(empty?-4:7),b:bottom});
+
+    boxes.push({
+      l:p.x-half-7,
+      r:p.x+half+suffix+7,
+      t:p.y+7,
+      b:p.y+41
+    });
   }
+
   for(const t of layout.terminals){
-    const main=textWidth(t.text,`${t.italic?'italic ':''}20px Georgia`);
-    const suffix=annotatedWidth(t.text,t.parts)-textWidth(t.text,'20px Georgia');
-    const fw=t.form?textWidth(t.form,'15px Georgia')/2:0;
-    const bottom=t.y+(t.form?63:t.parts.length?44:36);
-    boxes.push({l:t.x-Math.max(main/2,fw)-6,
-      r:t.x+Math.max(main/2+suffix,fw)+6,t:t.y+5,b:bottom});
+    const w=annotatedWidth(t.text,t.parts);
+    boxes.push({
+      l:t.x-w/2-7,
+      r:t.x+w/2+7,
+      t:t.y+5,
+      b:t.y+(t.form?63:t.parts.length?44:38)
+    });
   }
+
   for(const t of layout.triangles){
     const half=Math.max(65,t.span/2-4);
-    boxes.push({l:t.x-half-6,r:t.x+half+6,t:t.y+47,b:t.y+131});
+    boxes.push({
+      l:t.x-half-6,
+      r:t.x+half+6,
+      t:t.y+47,
+      b:t.y+131
+    });
   }
-  for(const c of comments){
-    boxes.push({l:c.x-8,r:c.x+c.w+8,t:c.y-8,b:c.y+c.h+8});
-  }
-  const anchor=(node,isTarget)=>{
-    const p=layout.points.get(node.uid);
-    if(isTarget&&displayLabel(node)==='EMPTY')return {x:p.x,y:p.y+23.5};
-    let lowest=-Infinity;
-    const xs=[];
-    for(const member of walk(node)){
-      const q=layout.points.get(member.uid);
-      const terminal=layout.terminals.find(t=>
-        Math.abs(t.x-q.x)<0.01&&Math.abs(t.y-q.y-39)<0.01);
-      const triangle=layout.triangles.find(t=>
-        Math.abs(t.x-q.x)<0.01&&Math.abs(t.y-q.y)<0.01);
-      let bottom=bottoms.get(member.uid);
-      if(triangle)bottom=q.y+131;
-      else if(terminal)bottom=terminal.y+(terminal.form?63:terminal.parts.length?44:36);
-      if(bottom>lowest+0.5){lowest=bottom;xs.length=0;xs.push(q.x);}
-      else if(Math.abs(bottom-lowest)<=0.5)xs.push(q.x);
-    }
-    return {x:(Math.min(...xs)+Math.max(...xs))/2,y:lowest+8};
-  };
 
-  const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
-  const mix=(a,b,t)=>({x:a.x+(b.x-a.x)*t,y:a.y+(b.y-a.y)*t});
-  const distanceToBranch=(p,e)=>{
-    const a={x:e.x1,y:e.y1},b={x:e.x2,y:e.y2};
-    const dx=b.x-a.x,dy=b.y-a.y;
-    const t=Math.max(0,Math.min(1,((p.x-a.x)*dx+(p.y-a.y)*dy)/(dx*dx+dy*dy||1)));
-    return dist(p,mix(a,b,t));
-  };
-  const sample=(points,a,b,c,d)=>{
-    const length=dist(a,b)+dist(b,c)+(d?dist(c,d):0);
-    const count=Math.max(2,Math.ceil(length/3));
-    for(let i=1;i<=count;i++){
-      const t=i/count;
-      const p=mix(mix(a,b,t),mix(b,c,t),t);
-      points.push(d?mix(p,mix(mix(b,c,t),mix(c,d,t),t),t):p);
-    }
-  };
-  const xy=p=>`${p.x} ${p.y}`;
-
-  // Every candidate is a single convex cubic. The two controls are
-  // on the same side of the chord, in increasing chord order.
-  // This rules out S-bends, corners and grid-based detours.
-  for(const arrow of arrows){
-    const target=byId.get(arrow.targetId);
-    const start=anchor(arrow.source,false),end=anchor(target,true);
-    const empty=displayLabel(target)==='EMPTY';
-    const dx=end.x-start.x,dy=end.y-start.y;
-    const span=Math.hypot(dx,dy);
-    if(span<0.01)continue;
-
-    const normal={x:-dy/span,y:dx/span};
-    // Prefer the side that bows downward/outward from the tree.
-    const preferred=normal.y>0?1:normal.y<0?-1:
-      (normal.x<0?1:-1);
-    const desired=Math.min(64,Math.max(15,span*0.15));
-    const maxDrop=Math.min(64,Math.max(20,span*0.15));
-    const limit=Math.min(380,Math.max(desired*2,span*1.1));
-    const bows=[...new Set([desired,desired*0.75,desired*0.5,
-      ...Array.from({length:Math.ceil(limit/12)},(_,i)=>Math.min(limit,12*(i+1)))])];
-    let best=null;
-
-    const hitsAt=p=>{
-      if(p.x<minX+10||p.x>maxRight-10||p.y<minY+10||p.y>maxBottom-10)return 100;
-      let hits=0;
-      if(boxes.some(box=>{
-        if(empty&&box.id===target.uid&&dist(p,end)<38)return false;
-        return p.x>=box.l&&p.x<=box.r&&p.y>=box.t&&p.y<=box.b;
-      }))hits+=3;
-      if(layout.edges.some(e=>p.x>=Math.min(e.x1,e.x2)-6&&p.x<=Math.max(e.x1,e.x2)+6&&
-        p.y>=Math.min(e.y1,e.y2)-6&&p.y<=Math.max(e.y1,e.y2)+6&&distanceToBranch(p,e)<6))hits++;
-      return hits;
+  const cubicPoint=(a,b,c,d,t)=>{
+    const u=1-t;
+    return {
+      x:u*u*u*a.x+3*u*u*t*b.x+3*u*t*t*c.x+t*t*t*d.x,
+      y:u*u*u*a.y+3*u*u*t*b.y+3*u*t*t*c.y+t*t*t*d.y
     };
+  };
 
-    for(const side of [preferred,-preferred]){
-      for(const bow of bows){
-        for(const lead of [0.10,0.25,0.40]){
-          const b={x:start.x+dx*lead+normal.x*bow*side,
-            y:start.y+dy*lead+normal.y*bow*side};
-          const c={x:end.x-dx*lead+normal.x*bow*side,
-            y:end.y-dy*lead+normal.y*bow*side};
-          const points=[start];sample(points,start,b,c,end);
-          let hits=0,length=0,drop=0;
-          for(let i=0;i<points.length;i++){
-            const p=points[i];
-            hits+=hitsAt(p);
-            if(i)length+=dist(p,points[i-1]);
-            drop=Math.max(drop,p.y-Math.max(start.y,end.y));
-          }
-          // A compact arc is more important than an elaborate detour.
-          // Prefer clear routes within the drop budget; if none exists,
-          // keep the arc compact and minimize unavoidable intersections.
-          const excess=Math.max(0,drop-maxDrop);
-          const shape=length-span+drop*1.6+Math.abs(bow-desired)*0.9+
-            (side===preferred?0:20)+Math.abs(lead-0.25)*12;
-          const score=[excess>0.01?1:0,hits,excess,shape];
-          if(!best||score.some((v,i)=>v<best.score[i]&&
-            score.slice(0,i).every((n,j)=>n===best.score[j]))){
-            best={d:`M${xy(start)} C${xy(b)} ${xy(c)} ${xy(end)}`,score};
-          }
+  const distanceToBranch=(p,e)=>{
+    const dx=e.x2-e.x1,dy=e.y2-e.y1;
+    const denom=dx*dx+dy*dy||1;
+    const t=Math.max(0,Math.min(1,((p.x-e.x1)*dx+(p.y-e.y1)*dy)/denom));
+    return Math.hypot(p.x-e.x1-t*dx,p.y-e.y1-t*dy);
+  };
+
+  const countCollisions=points=>{
+    let collisions=0;
+
+    for(const p of points){
+      for(const box of boxes){
+        if(p.x>=box.l&&p.x<=box.r&&p.y>=box.t&&p.y<=box.b){
+          collisions++;
+          break;
+        }
+      }
+
+      for(const edge of layout.edges){
+        if(p.x<Math.min(edge.x1,edge.x2)-8||p.x>Math.max(edge.x1,edge.x2)+8||
+           p.y<Math.min(edge.y1,edge.y2)-8||p.y>Math.max(edge.y1,edge.y2)+8)continue;
+
+        if(distanceToBranch(p,edge)<7){
+          collisions++;
+          break;
         }
       }
     }
 
-    if(best)arrowGroup.append(svgEl('path',{
-      d:best.d,fill:'none',stroke:palette.selection,'stroke-width':2,
-      'stroke-linecap':'round','stroke-linejoin':'round',
+    return collisions;
+  };
+
+  const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
+  const rounded=value=>Math.round(value*10)/10;
+  const sceneCenter=layout.sceneW/2;
+
+  for(const arrow of arrows){
+    const target=byId.get(arrow.targetId);
+    if(!target)continue;
+
+    const start=anchor(arrow.source,false);
+    const end=anchor(target,true);
+    if(!start||!end)continue;
+
+    const dx=end.x-start.x;
+    const dy=Math.max(0,start.y-end.y);
+
+    const outwardPreference=((start.x+end.x)/2<=sceneCenter?-1:1) || (dx<0?-1:1);
+    let best=null;
+
+    for(const side of [outwardPreference,-outwardPreference]){
+      for(const bowScale of [1,1.18,1.36]){
+        const bow=clamp(56+Math.abs(dx)*0.26+dy*0.08,56,170)*bowScale;
+        const tailDrop=clamp(12+dy*0.05,12,24);
+        const headDrop=clamp(34+dy*0.20,34,96);
+
+        const c1={x:start.x+side*bow,y:start.y+tailDrop};
+        const c2={x:end.x+side*bow*0.88,y:end.y+headDrop};
+
+        const points=[];
+        let maxY=start.y;
+
+        for(let i=1;i<16;i++){
+          const p=cubicPoint(start,c1,c2,end,i/16);
+          points.push(p);
+          if(p.y>maxY)maxY=p.y;
+        }
+
+        const collisions=countCollisions(points);
+        const extraDepth=Math.max(0,maxY-start.y-26);
+        const inwardPenalty=side===outwardPreference?0:14;
+        const compactness=bow*0.03+extraDepth*2.4;
+        const score=collisions*120+compactness+inwardPenalty;
+
+        if(!best||score<best.score){
+          best={score,c1,c2};
+        }
+
+        if(score<1)break;
+      }
+    }
+
+    const path=`M${rounded(start.x)} ${rounded(start.y)} `+
+      `C${rounded(best.c1.x)} ${rounded(best.c1.y)} `+
+      `${rounded(best.c2.x)} ${rounded(best.c2.y)} `+
+      `${rounded(end.x)} ${rounded(end.y)}`;
+
+    arrowGroup.append(svgEl('path',{
+      d:path,
+      fill:'none',
+      stroke:palette.bg,
+      'stroke-width':4.5,
+      'stroke-linecap':'round',
+      'stroke-linejoin':'round'
+    }));
+
+    arrowGroup.append(svgEl('path',{
+      d:path,
+      fill:'none',
+      stroke:palette.selection,
+      'stroke-width':2,
+      'stroke-linecap':'round',
+      'stroke-linejoin':'round',
       'marker-end':`url(#${markerId})`
     }));
   }
@@ -2135,7 +2197,7 @@ function changeZoom(factor){
   const canvas=$('scrollCanvas'),oldWidth=sceneWidth*current,oldHeight=sceneHeight*current;
   const focusX=(canvas.scrollLeft+canvas.clientWidth/2)/Math.max(1,oldWidth);
   const focusY=(canvas.scrollTop+canvas.clientHeight/2)/Math.max(1,oldHeight);
-  drawTree();
+  applyZoom();
   canvas.scrollLeft=focusX*sceneWidth*zoom-canvas.clientWidth/2;
   canvas.scrollTop=focusY*sceneHeight*zoom-canvas.clientHeight/2;
 }
