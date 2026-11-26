@@ -1757,8 +1757,9 @@ function createTreeSvg(layout,comments){
   for(const e of layout.edges){
     content.append(svgEl('line',{x1:e.x1,y1:e.y1,x2:e.x2,y2:e.y2,stroke:palette.edge,'stroke-width':2,'stroke-linecap':'round'}));
   }
-  // Rounded movement arrows. Each arrow is routed independently so new arrows do not distort older ones.
-  // The renderer tests only a small number of smooth cubic curves, which keeps editing responsive.
+   // Rounded movement arrows. Each arrow is drawn independently and stays on its assigned side.
+  // Leftward movement curves on the left; rightward movement curves on the right.
+  // We test only a few symmetric arc sizes, which keeps the editor responsive.
   const arrowGroup=svgEl('g',{'class':'movement-arrows'});
   const markerId='movement-arrowhead';
   const marker=svgEl('marker',{
@@ -1893,7 +1894,6 @@ function createTreeSvg(layout,comments){
 
   const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
   const rounded=value=>Math.round(value*10)/10;
-  const sceneCenter=layout.sceneW/2;
 
   for(const arrow of arrows){
     const target=byId.get(arrow.targetId);
@@ -1904,41 +1904,47 @@ function createTreeSvg(layout,comments){
     if(!start||!end)continue;
 
     const dx=end.x-start.x;
-    const dy=Math.max(0,start.y-end.y);
+    const spanX=Math.abs(dx);
+    const spanY=Math.abs(start.y-end.y);
 
-    const outwardPreference=((start.x+end.x)/2<=sceneCenter?-1:1) || (dx<0?-1:1);
+    // Leftward movement stays on the left. Rightward movement stays on the right.
+    // If nearly vertical, default to the left, which is more natural for syntax-tree movement.
+    const side=dx<=0?-1:1;
+
+    const baseRadius=clamp(52+spanX*0.20+spanY*0.22,58,210);
+    const departDrop=clamp(10+spanY*0.03,10,20);
+    const headRise=clamp(24+spanY*0.10,24,56);
+
     let best=null;
 
-    for(const side of [outwardPreference,-outwardPreference]){
-      for(const bowScale of [1,1.18,1.36]){
-        const bow=clamp(56+Math.abs(dx)*0.26+dy*0.08,56,170)*bowScale;
-        const tailDrop=clamp(12+dy*0.05,12,24);
-        const headDrop=clamp(34+dy*0.20,34,96);
+    for(const scale of [0.92,1,1.12,1.26,1.42]){
+      const radius=baseRadius*scale;
+      const outerX=side<0
+        ?Math.min(start.x,end.x)-radius
+        :Math.max(start.x,end.x)+radius;
 
-        const c1={x:start.x+side*bow,y:start.y+tailDrop};
-        const c2={x:end.x+side*bow*0.88,y:end.y+headDrop};
+      // Both control points share the same outer X coordinate,
+      // giving a more symmetric half-circle / half-ellipse style curve.
+      const c1={x:outerX,y:start.y+departDrop};
+      const c2={x:outerX,y:end.y+headRise};
 
-        const points=[];
-        let maxY=start.y;
+      const points=[];
+      let maxY=Math.max(start.y,end.y);
 
-        for(let i=1;i<16;i++){
-          const p=cubicPoint(start,c1,c2,end,i/16);
-          points.push(p);
-          if(p.y>maxY)maxY=p.y;
-        }
-
-        const collisions=countCollisions(points);
-        const extraDepth=Math.max(0,maxY-start.y-26);
-        const inwardPenalty=side===outwardPreference?0:14;
-        const compactness=bow*0.03+extraDepth*2.4;
-        const score=collisions*120+compactness+inwardPenalty;
-
-        if(!best||score<best.score){
-          best={score,c1,c2};
-        }
-
-        if(score<1)break;
+      for(let i=1;i<18;i++){
+        const p=cubicPoint(start,c1,c2,end,i/18);
+        points.push(p);
+        if(p.y>maxY)maxY=p.y;
       }
+
+      const collisions=countCollisions(points);
+      const extraDepth=Math.max(0,maxY-start.y-18);
+      const depthPenalty=extraDepth*3.2;
+      const widthPenalty=radius*0.035;
+      const score=collisions*120+depthPenalty+widthPenalty;
+
+      if(!best||score<best.score)best={score,c1,c2};
+      if(score<1)break;
     }
 
     const path=`M${rounded(start.x)} ${rounded(start.y)} `+
