@@ -1888,13 +1888,23 @@ function movementRoutes(layout){
     }
     const obstacles=[...boxes,...protectedBoxes];
     let best=null;
-    const test=(bx,by,preference)=>{
+    const test=(bx,by,preference,underpass=null)=>{
       // Two quarter-ellipse cubics with matching tangents at the midpoint.
       // The bow is always toward the movement side and/or downward.
       const bow={x:side*bx,y:by},k=0.5522847498;
-      const peak=add(m,bow);
-      const c1=add(start,bow,k),c2=add(peak,h,-k);
-      const c3=add(peak,h,k),c4=add(end,bow,k);
+      let peak=add(m,bow);
+      let c1=add(start,bow,k),c2=add(peak,h,-k);
+      let c3=add(peak,h,k),c4=add(end,bow,k);
+      if(underpass){
+        // Two rounded shoulders meet at the actual lowest point.
+        // Unlike a tilted ellipse, this keeps the bottom at the chosen depth.
+        peak={x:underpass.x,y:underpass.y};
+        const shoulder=0.88;
+        c1={x:start.x,y:start.y+shoulder*(peak.y-start.y)};
+        c2={x:peak.x+shoulder*(start.x-peak.x),y:peak.y};
+        c3={x:peak.x+shoulder*(end.x-peak.x),y:peak.y};
+        c4={x:end.x,y:end.y+shoulder*(peak.y-end.y)};
+      }
       const points=[start];
       flatten(start,c1,c2,peak,points);flatten(peak,c3,c4,end,points);
       let b=rect(start.x,start.x,start.y,start.y);
@@ -1929,6 +1939,35 @@ function movementRoutes(layout){
     for(const scale of [1,1.25,1.6]){
       const trial=test(baseX*scale,baseY*scale,Math.abs(1-scale)*20);
       if(!trial.hits)break;
+    }
+    if(Math.abs(dx)>8&&(best.hits||best.bounds.b>Math.max(start.y,end.y)+80)){
+      // Look for a rounded, shallow U below the intervening material.
+      // Its deepest point is set directly instead of scaling the entire ellipse.
+      const between=[...obstacles,...branches.map(e=>e.box)].filter(o=>
+        o.l>left+1&&o.r<right-1);
+      const lowest=between.reduce((b,o)=>Math.max(b,o.b),Math.max(start.y,end.y));
+      const deep=between.filter(o=>o.b>=lowest-35);
+      const lowX=deep.length
+        ?(Math.min(...deep.map(o=>o.l))+Math.max(...deep.map(o=>o.r)))/2:m.x;
+      const xMin=left+(right-left)*0.2,xMax=right-(right-left)*0.2;
+      const centers=[...new Set([Math.max(xMin,Math.min(xMax,lowX)),m.x])];
+      const floor=lowest+12;
+      for(const x of centers){
+        let lo=floor;
+        for(const extra of [0,16,32,64,112,180]){
+          const y=floor+extra;
+          const trial=test(0,0,22,{x,y});
+          if(trial.hits){lo=y;continue;}
+          let hi=y;
+          for(let i=0;i<5&&hi-lo>2;i++){
+            const next=(lo+hi)/2;
+            if(test(0,0,22,{x,y:next}).hits)lo=next;
+            else hi=next;
+          }
+          break;
+        }
+        if(!best.hits&&best.bounds.b<=floor+20)break;
+      }
     }
     if(best.hits&&Math.abs(dx)>8){
       // Underpass: with zero horizontal bow, x is monotonic. Estimate the
