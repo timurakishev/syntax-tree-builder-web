@@ -1744,15 +1744,246 @@ function applyZoom(){
   stage.style.height=`${Math.max(sceneHeight*zoom,$('scrollCanvas').clientHeight)}px`;
   svg.style.margin='auto';
 }
+// Cache arrow paths until visible tree geometry changes.
+let movementGeometryKey='';
+const movementPathCache=new Map();
+
+// Compute independent, smooth movement arcs in unscaled tree coordinates.
+function movementRoutes(layout){
+  const nodes=[...walk(root)];
+  if(!nodes.some(n=>n.movement_arrows.length))return [];
+  const geometryKey=JSON.stringify([
+    layout.sceneW,layout.sceneH,[...layout.points],layout.terminals,layout.triangles,layout.edges,
+    nodes.map(n=>[n.uid,n.children.map(c=>c.uid),displayLabel(n),displayLabelParts(n),n.trace?.placement])
+  ]);
+  if(geometryKey!==movementGeometryKey){
+    movementGeometryKey=geometryKey;
+    movementPathCache.clear();
+  }
+  const routes=[];
+  const pending=[];
+  for(const source of nodes){
+    for(const targetId of source.movement_arrows){
+      const cacheKey=JSON.stringify([source.uid,targetId]);
+      if(movementPathCache.has(cacheKey))routes.push(movementPathCache.get(cacheKey));
+      else pending.push({source,targetId,cacheKey});
+    }
+  }
+  if(!pending.length)return routes;
+  const byId=new Map(nodes.map(n=>[n.uid,n]));
+  const parents=new Map();
+  const bounds=new Map(),anchors=new Map(),boxes=[],branches=[];
+  const key=(x,y)=>`${x}:${y}`;
+  const terminals=new Map(layout.terminals.map(t=>[key(t.x,t.y-39),t]));
+  const triangles=new Map(layout.triangles.map(t=>[key(t.x,t.y),t]));
+  const rect=(l,r,t,b)=>({l,r,t,b});
+  const union=(a,b)=>rect(Math.min(a.l,b.l),Math.max(a.r,b.r),
+    Math.min(a.t,b.t),Math.max(a.b,b.b));
+  const pad=(a,p)=>rect(a.l-p,a.r+p,a.t-p,a.b+p);
+
+  // Measure visible material once, then collect subtree bounds bottom-up.
+  for(const n of nodes){
+    const p=layout.points.get(n.uid);
+    for(const child of n.children)parents.set(child.uid,n.uid);
+    const label=displayLabel(n),parts=displayLabelParts(n);
+    const font=n.trace?.placement==='replace-label'?'italic 20px Georgia':'bold 20px Georgia';
+    const half=label==='EMPTY'?0:textWidth(label,font)/2;
+    const suffix=parts.reduce((w,part)=>w+3+textWidth(part.text,
+      `${part.italic?'italic ':''}13px Georgia`),0);
+    let b=rect(p.x-half,p.x+half+suffix,p.y+7,p.y+(parts.length?43:37));
+    if(label!=='EMPTY')boxes.push(pad(b,6));
+    const t=terminals.get(key(p.x,p.y));
+    const tri=triangles.get(key(p.x,p.y));
+    if(t){
+      const main=textWidth(t.text,'20px Georgia');
+      const extra=annotatedWidth(t.text,t.parts)-main;
+      const fw=t.form?textWidth(t.form,'15px Georgia')/2:0;
+      const tb=rect(t.x-Math.max(main/2,fw),t.x+Math.max(main/2+extra,fw),
+        t.y+4,t.y+(t.form?61:t.parts.length?43:36));
+      boxes.push(pad(tb,6));b=union(b,tb);
+    }
+    if(tri){
+      const w=Math.max(65,tri.span/2-4);
+      const tb=rect(p.x-w,p.x+w,p.y+47,p.y+130);
+      boxes.push(pad(tb,6));b=union(b,tb);
+    }
+    bounds.set(n.uid,b);
+    anchors.set(n.uid,{bottom:b.b,left:p.x,right:p.x});
+  }
+  for(let i=nodes.length-1;i>=0;i--){
+    const n=nodes[i];
+    let b=bounds.get(n.uid),a=anchors.get(n.uid);
+    for(const child of n.children){
+      b=union(b,bounds.get(child.uid));
+      const c=anchors.get(child.uid);
+      if(c.bottom>a.bottom+0.5)a={...c};
+      else if(Math.abs(c.bottom-a.bottom)<=0.5)a={bottom:Math.max(a.bottom,c.bottom),
+        left:Math.min(a.left,c.left),right:Math.max(a.right,c.right)};
+    }
+    bounds.set(n.uid,b);anchors.set(n.uid,a);
+  }
+  for(const e of layout.edges){
+    const dx=e.x2-e.x1,dy=e.y2-e.y1,len=Math.hypot(dx,dy)||1;
+    branches.push({x:e.x1,y:e.y1,ux:dx/len,uy:dy/len,len,
+      box:pad(rect(Math.min(e.x1,e.x2),Math.max(e.x1,e.x2),
+        Math.min(e.y1,e.y2),Math.max(e.y1,e.y2)),7)});
+  }
+  const anchor=(node,target)=>{
+    const p=layout.points.get(node.uid),a=anchors.get(node.uid);
+    if(target&&displayLabel(node)==='EMPTY')return {x:p.x,y:p.y+23.5};
+    return {x:(a.left+a.right)/2,y:a.bottom+(target?17:11)};
+  };
+  const contains=(b,p)=>p.x>=b.l&&p.x<=b.r&&p.y>=b.t&&p.y<=b.b;
+  const overlaps=(a,b)=>a.l<=b.r&&a.r>=b.l&&a.t<=b.b&&a.b>=b.t;
+  // Test the entire line segment, not only the sampled endpoints.
+  const hitsRect=(a,b,r)=>{
+    let lo=0,hi=1;
+    for(const [v,d,min,max] of [[a.x,b.x-a.x,r.l,r.r],[a.y,b.y-a.y,r.t,r.b]]){
+      if(Math.abs(d)<1e-9){if(v<min||v>max)return false;continue;}
+      const p=(min-v)/d,q=(max-v)/d;
+      lo=Math.max(lo,Math.min(p,q));hi=Math.min(hi,Math.max(p,q));
+      if(lo>hi)return false;
+    }
+    return true;
+  };
+  const project=(p,e)=>({x:(p.x-e.x)*e.ux+(p.y-e.y)*e.uy,
+    y:-(p.x-e.x)*e.uy+(p.y-e.y)*e.ux});
+  const mid=(a,b)=>({x:(a.x+b.x)/2,y:(a.y+b.y)/2});
+  const add=(a,b,k=1)=>({x:a.x+k*b.x,y:a.y+k*b.y});
+  const distLine=(p,a,b)=>{
+    const dx=b.x-a.x,dy=b.y-a.y,d=dx*dx+dy*dy;
+    const t=d?Math.max(0,Math.min(1,((p.x-a.x)*dx+(p.y-a.y)*dy)/d)):0;
+    return Math.hypot(p.x-a.x-t*dx,p.y-a.y-t*dy);
+  };
+  // Flatten each cubic adaptively to subpixel tolerance for collision tests.
+  const flatten=(a,b,c,d,out,depth=0)=>{
+    if(depth>=12||Math.max(distLine(b,a,d),distLine(c,a,d))<=0.75){out.push(d);return;}
+    const ab=mid(a,b),bc=mid(b,c),cd=mid(c,d);
+    const abc=mid(ab,bc),bcd=mid(bc,cd),m=mid(abc,bcd);
+    flatten(a,ab,abc,m,out,depth+1);flatten(m,bcd,cd,d,out,depth+1);
+  };
+  const rounded=v=>Math.round(v*100)/100;
+  const xy=p=>`${rounded(p.x)} ${rounded(p.y)}`;
+  for(const {source,targetId,cacheKey} of pending){
+    const target=byId.get(targetId);if(!target||target===source)continue;
+    const start=anchor(source,false),end=anchor(target,true);
+    const dx=end.x-start.x,dy=end.y-start.y;
+    const length=Math.hypot(dx,dy);if(length<0.01)continue;
+    const side=dx<=0?-1:1;
+    const m=mid(start,end),h={x:dx/2,y:dy/2};
+    const pathNodes=new Set();
+    for(const n of [source,target]){
+      for(let id=n.uid;id;id=parents.get(id))pathNodes.add(id);
+    }
+    // Protect entire intervening sister subtrees, including their lower branches.
+    const protectedBoxes=[];
+    const left=Math.min(start.x,end.x),right=Math.max(start.x,end.x);
+    for(const id of pathNodes){
+      for(const child of byId.get(id).children){
+        if(pathNodes.has(child.uid))continue;
+        const p=layout.points.get(child.uid),b=pad(bounds.get(child.uid),10);
+        if(p.x>left+3&&p.x<right-3&&p.y<=Math.max(start.y,end.y)&&
+           !contains(b,start)&&!contains(b,end))protectedBoxes.push(b);
+      }
+    }
+    const obstacles=[...boxes,...protectedBoxes];
+    let best=null;
+    const test=(bx,by,preference)=>{
+      // Two quarter-ellipse cubics with matching tangents at the midpoint.
+      // The bow is always toward the movement side and/or downward.
+      const bow={x:side*bx,y:by},k=0.5522847498;
+      const peak=add(m,bow);
+      const c1=add(start,bow,k),c2=add(peak,h,-k);
+      const c3=add(peak,h,k),c4=add(end,bow,k);
+      const points=[start];
+      flatten(start,c1,c2,peak,points);flatten(peak,c3,c4,end,points);
+      let b=rect(start.x,start.x,start.y,start.y);
+      for(const p of points)b=union(b,rect(p.x,p.x,p.y,p.y));
+      const broad=pad(b,2);
+      const localBoxes=obstacles.filter(o=>overlaps(o,broad));
+      const localBranches=branches.filter(e=>overlaps(e.box,broad));
+      const touched=new Set();
+      for(let i=1;i<points.length;i++){
+        const a=points[i-1],z=points[i];
+        const s=rect(Math.min(a.x,z.x),Math.max(a.x,z.x),Math.min(a.y,z.y),Math.max(a.y,z.y));
+        for(const o of localBoxes){if(!touched.has(o)&&overlaps(s,o)&&hitsRect(a,z,o))touched.add(o);}
+        for(const e of localBranches){
+          if(!touched.has(e)&&overlaps(s,e.box)&&hitsRect(project(a,e),project(z,e),rect(-7,e.len+7,-7,7)))touched.add(e);
+        }
+      }
+      const score=preference+Math.max(0,b.b-Math.max(start.y,end.y))*0.6+
+        Math.max(0,left-b.l,b.r-right)*0.35;
+      const candidate={d:`M${xy(start)} C${xy(c1)} ${xy(c2)} ${xy(peak)} C${xy(c3)} ${xy(c4)} ${xy(end)}`,
+        bounds:b,hits:touched.size,score};
+      if(!best||candidate.hits<best.hits||(candidate.hits===best.hits&&score<best.score))best=candidate;
+      return candidate;
+    };
+    // Prefer near-semicircles; use a compact elliptical bow for long moves.
+    let baseX=Math.min(190,Math.abs(dy)*0.5);
+    let baseY=Math.min(170,Math.abs(dx)*0.5);
+    // For downward movement, avoid a bow parallel to the chord.
+    if(dy>0){
+      if(Math.abs(dx)>=dy*0.5)baseX=0;
+      else baseY=0;
+    }
+    for(const scale of [1,1.25,1.6]){
+      const trial=test(baseX*scale,baseY*scale,Math.abs(1-scale)*20);
+      if(!trial.hits)break;
+    }
+    if(best.hits&&Math.abs(dx)>8){
+      // Underpass: with zero horizontal bow, x is monotonic. Estimate the
+      // depth needed to pass below all intervening material, then verify it.
+      // Only obstacles strictly between the endpoints constrain this estimate.
+      let required=Math.max(35,baseY);
+      for(const o of [...obstacles,...branches.map(e=>e.box)]){
+        if(o.l<=left+1||o.r>=right-1)continue;
+        for(const x of [o.l,o.r]){
+          const u=(x-start.x)/dx;
+          const height=Math.sqrt(Math.max(0,4*u*(1-u)));
+          if(height>0.01)required=Math.max(required,(o.b+15-(start.y+dy*u))/height);
+        }
+      }
+      const limit=Math.max(100,layout.sceneH-Math.min(start.y,end.y)+80);
+      required=Math.min(required*1.05,limit);
+      // Try compact downward bows first; then the calculated clearance.
+      // Find a clear downward arc, then tighten it with a bounded search.
+      // A pure downward bow never overshoots either endpoint horizontally.
+      const depths=[baseY*1.5+25,baseY*2+45,required,Math.min(limit,required*1.25+20),limit];
+      for(const bx of [0,Math.min(baseX*0.18,24)]){
+        let lo=0;
+        for(const depth of [...new Set(depths)].sort((a,b)=>a-b)){
+          const trial=test(bx,depth,30);
+          if(trial.hits){lo=depth;continue;}
+          let hi=depth;
+          for(let i=0;i<7&&hi-lo>3;i++){
+            const mid=(lo+hi)/2;
+            if(test(bx,mid,30).hits)lo=mid;
+            else hi=mid;
+          }
+          break;
+        }
+        if(!best.hits)break;
+      }
+    }
+    if(best.hits){
+      // Extra side clearance for unusually tall, narrow or nearly vertical trees.
+      for(const scale of [2,3])test(Math.max(24,baseX*scale),baseY*scale,70+scale*10);
+    }
+    movementPathCache.set(cacheKey,best);
+  }
+  return nodes.flatMap(n=>n.movement_arrows.map(id=>movementPathCache.get(JSON.stringify([n.uid,id]))).filter(Boolean));
+}
+
 function createTreeSvg(layout,comments){
   const palette=getTreePalette();
   const svg=$('treeSvg');svg.replaceChildren();
-  const hasMovementArrows=[...walk(root)].some(node=>node.movement_arrows.length>0);
-  const maxRight=Math.max(layout.sceneW+(hasMovementArrows?150:0),...comments.map(c=>c.x+c.w+30));
-  const maxBottom=Math.max(layout.sceneH+(hasMovementArrows?120:0),...comments.map(c=>c.y+c.h+30));
+  const routes=movementRoutes(layout);
+  const hasMovementArrows=routes.length>0;
+  const maxRight=Math.max(layout.sceneW+(hasMovementArrows?150:0),...comments.map(c=>c.x+c.w+30),...routes.map(r=>r.bounds.r+30));
+  const maxBottom=Math.max(layout.sceneH+(hasMovementArrows?120:0),...comments.map(c=>c.y+c.h+30),...routes.map(r=>r.bounds.b+30));
   const arrowPadding=hasMovementArrows?150:0;
-  const minX=Math.min(-arrowPadding,...comments.map(c=>c.x-30));
-  const minY=Math.min(0,...comments.map(c=>c.y-30));
+  const minX=Math.min(-arrowPadding,...comments.map(c=>c.x-30),...routes.map(r=>r.bounds.l-30));
+  const minY=Math.min(0,...comments.map(c=>c.y-30),...routes.map(r=>r.bounds.t-30));
   const offsetX=-minX,offsetY=-minY;
   sceneWidth=Math.max(1,maxRight-minX);sceneHeight=Math.max(1,maxBottom-minY);
   svg.setAttribute('viewBox',`0 0 ${sceneWidth} ${sceneHeight}`);
@@ -1765,219 +1996,27 @@ function createTreeSvg(layout,comments){
   for(const e of layout.edges){
     content.append(svgEl('line',{x1:e.x1,y1:e.y1,x2:e.x2,y2:e.y2,stroke:palette.edge,'stroke-width':2,'stroke-linecap':'round'}));
   }
-   // Rounded movement arrows. Each arrow is drawn independently and stays on its assigned side.
-  // Leftward movement curves on the left; rightward movement curves on the right.
-  // We test only a few symmetric arc sizes, which keeps the editor responsive.
-  const arrowGroup=svgEl('g',{'class':'movement-arrows'});
-  const markerId='movement-arrowhead';
-  const marker=svgEl('marker',{
-    id:markerId,viewBox:'0 0 12 12',refX:10.4,refY:6,
-    markerWidth:7,markerHeight:7,orient:'auto-start-reverse'
-  });
-  marker.append(svgEl('path',{d:'M1 1 L11 6 L1 11 Z',fill:palette.selection}));
-  defs.append(marker);
-
-  const allNodes=[...walk(root)];
-  const byId=new Map(allNodes.map(node=>[node.uid,node]));
-  const arrows=allNodes.flatMap(source=>source.movement_arrows
-    .filter(targetId=>layout.points.has(targetId))
-    .map(targetId=>({source,targetId})));
-
-  const anchor=(node,isTarget)=>{
-    const p=layout.points.get(node.uid);
-    if(!p)return null;
-    if(isTarget&&displayLabel(node)==='EMPTY')return {x:p.x,y:p.y+23.5};
-
-    let lowest=-Infinity;
-    const xs=[];
-
-    for(const member of walk(node)){
-      const q=layout.points.get(member.uid);
-      if(!q)continue;
-
-      const terminal=layout.terminals.find(t=>
-        Math.abs(t.x-q.x)<0.01&&Math.abs(t.y-q.y-39)<0.01);
-      const triangle=layout.triangles.find(t=>
-        Math.abs(t.x-q.x)<0.01&&Math.abs(t.y-q.y)<0.01);
-
-      let bottom=q.y+(displayLabelParts(member).length?43:37);
-
-      if(triangle)bottom=q.y+130;
-      else if(terminal)bottom=terminal.y+(terminal.form?61:terminal.parts.length?43:36);
-
-      if(bottom>lowest+0.5){
-        lowest=bottom;
-        xs.length=0;
-        xs.push(q.x);
-      }else if(Math.abs(bottom-lowest)<=0.5){
-        xs.push(q.x);
-      }
-    }
-
-    return {
-      x:(Math.min(...xs)+Math.max(...xs))/2,
-      y:lowest+(isTarget?17:11)
-    };
-  };
-
-  const boxes=[];
-
-  for(const node of allNodes){
-    const p=layout.points.get(node.uid);
-    if(!p||displayLabel(node)==='EMPTY')continue;
-
-    const label=displayLabel(node),parts=displayLabelParts(node);
-    const font=`${node.trace?.placement==='replace-label'?'italic':'bold'} 20px Georgia`;
-    const half=textWidth(label,font)/2;
-    const suffix=parts.reduce((w,part)=>w+3+textWidth(part.text,
-      `${part.italic?'italic ':''}13px Georgia`),0);
-
-    boxes.push({
-      l:p.x-half-7,
-      r:p.x+half+suffix+7,
-      t:p.y+7,
-      b:p.y+41
+  // Draw each independently calculated path; preserve the theme and thin stroke.
+  const arrowGroup=svgEl('g',{'class':'movement-arrows','pointer-events':'none'});
+  if(routes.length){
+    const markerId='movement-arrowhead';
+    const marker=svgEl('marker',{
+      id:markerId,viewBox:'0 0 12 12',refX:11,refY:6,
+      markerWidth:7,markerHeight:7,orient:'auto-start-reverse'
     });
-  }
-
-  for(const t of layout.terminals){
-    const w=annotatedWidth(t.text,t.parts);
-    boxes.push({
-      l:t.x-w/2-7,
-      r:t.x+w/2+7,
-      t:t.y+5,
-      b:t.y+(t.form?63:t.parts.length?44:38)
-    });
-  }
-
-  for(const t of layout.triangles){
-    const half=Math.max(65,t.span/2-4);
-    boxes.push({
-      l:t.x-half-6,
-      r:t.x+half+6,
-      t:t.y+47,
-      b:t.y+131
-    });
-  }
-
-  const cubicPoint=(a,b,c,d,t)=>{
-    const u=1-t;
-    return {
-      x:u*u*u*a.x+3*u*u*t*b.x+3*u*t*t*c.x+t*t*t*d.x,
-      y:u*u*u*a.y+3*u*u*t*b.y+3*u*t*t*c.y+t*t*t*d.y
-    };
-  };
-
-  const distanceToBranch=(p,e)=>{
-    const dx=e.x2-e.x1,dy=e.y2-e.y1;
-    const denom=dx*dx+dy*dy||1;
-    const t=Math.max(0,Math.min(1,((p.x-e.x1)*dx+(p.y-e.y1)*dy)/denom));
-    return Math.hypot(p.x-e.x1-t*dx,p.y-e.y1-t*dy);
-  };
-
-  const countCollisions=points=>{
-    let collisions=0;
-
-    for(const p of points){
-      for(const box of boxes){
-        if(p.x>=box.l&&p.x<=box.r&&p.y>=box.t&&p.y<=box.b){
-          collisions++;
-          break;
-        }
-      }
-
-      for(const edge of layout.edges){
-        if(p.x<Math.min(edge.x1,edge.x2)-8||p.x>Math.max(edge.x1,edge.x2)+8||
-           p.y<Math.min(edge.y1,edge.y2)-8||p.y>Math.max(edge.y1,edge.y2)+8)continue;
-
-        if(distanceToBranch(p,edge)<7){
-          collisions++;
-          break;
-        }
-      }
+    marker.append(svgEl('path',{d:'M1 1 L11 6 L1 11 Z',fill:palette.selection}));
+    defs.append(marker);
+    for(const route of routes){
+      arrowGroup.append(svgEl('path',{
+        d:route.d,fill:'none',stroke:palette.bg,'stroke-width':4.5,
+        'stroke-linecap':'round','stroke-linejoin':'round'
+      }));
+      arrowGroup.append(svgEl('path',{
+        d:route.d,fill:'none',stroke:palette.selection,'stroke-width':1.7,
+        'stroke-linecap':'round','stroke-linejoin':'round',
+        'marker-end':`url(#${markerId})`
+      }));
     }
-
-    return collisions;
-  };
-
-  const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
-  const rounded=value=>Math.round(value*10)/10;
-
-  for(const arrow of arrows){
-    const target=byId.get(arrow.targetId);
-    if(!target)continue;
-
-    const start=anchor(arrow.source,false);
-    const end=anchor(target,true);
-    if(!start||!end)continue;
-
-    const dx=end.x-start.x;
-    const spanX=Math.abs(dx);
-    const spanY=Math.abs(start.y-end.y);
-
-    // Leftward movement stays on the left. Rightward movement stays on the right.
-    // If nearly vertical, default to the left, which is more natural for syntax-tree movement.
-    const side=dx<=0?-1:1;
-
-    const baseRadius=clamp(52+spanX*0.20+spanY*0.22,58,210);
-    const departDrop=clamp(10+spanY*0.03,10,20);
-    const headRise=clamp(24+spanY*0.10,24,56);
-
-    let best=null;
-
-    for(const scale of [0.92,1,1.12,1.26,1.42]){
-      const radius=baseRadius*scale;
-      const outerX=side<0
-        ?Math.min(start.x,end.x)-radius
-        :Math.max(start.x,end.x)+radius;
-
-      // Both control points share the same outer X coordinate,
-      // giving a more symmetric half-circle / half-ellipse style curve.
-      const c1={x:outerX,y:start.y+departDrop};
-      const c2={x:outerX,y:end.y+headRise};
-
-      const points=[];
-      let maxY=Math.max(start.y,end.y);
-
-      for(let i=1;i<18;i++){
-        const p=cubicPoint(start,c1,c2,end,i/18);
-        points.push(p);
-        if(p.y>maxY)maxY=p.y;
-      }
-
-      const collisions=countCollisions(points);
-      const extraDepth=Math.max(0,maxY-start.y-18);
-      const depthPenalty=extraDepth*3.2;
-      const widthPenalty=radius*0.035;
-      const score=collisions*120+depthPenalty+widthPenalty;
-
-      if(!best||score<best.score)best={score,c1,c2};
-      if(score<1)break;
-    }
-
-    const path=`M${rounded(start.x)} ${rounded(start.y)} `+
-      `C${rounded(best.c1.x)} ${rounded(best.c1.y)} `+
-      `${rounded(best.c2.x)} ${rounded(best.c2.y)} `+
-      `${rounded(end.x)} ${rounded(end.y)}`;
-
-    arrowGroup.append(svgEl('path',{
-      d:path,
-      fill:'none',
-      stroke:palette.bg,
-      'stroke-width':4.5,
-      'stroke-linecap':'round',
-      'stroke-linejoin':'round'
-    }));
-
-    arrowGroup.append(svgEl('path',{
-      d:path,
-      fill:'none',
-      stroke:palette.selection,
-      'stroke-width':1.7,
-      'stroke-linecap':'round',
-      'stroke-linejoin':'round',
-      'marker-end':`url(#${markerId})`
-    }));
   }
   content.append(arrowGroup);
   for(const n of walk(root)){
