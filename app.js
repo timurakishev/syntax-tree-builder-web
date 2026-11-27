@@ -1940,7 +1940,8 @@ function movementRoutes(layout){
         path=`M${xy(start)} L${xy(entry)} `+
           `A${rounded(radius)} ${rounded(radius)} 0 0 ${side<0?1:0} ${xy(exit)} `+
           `L${xy(end)}`;
-        
+
+      }else{
         // Preserve ordinary movement arrows.
         const peak=add(m,bow);
         const c1=add(start,bow,k),c2=add(peak,h,-k);
