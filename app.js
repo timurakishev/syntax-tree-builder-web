@@ -1867,6 +1867,18 @@ function movementRoutes(layout){
   for(const {source,targetId,cacheKey} of pending){
     const target=byId.get(targetId);if(!target||target===source)continue;
     const start=anchor(source,false),end=anchor(target,true);
+
+    // Separate incoming and outgoing attachment points.
+    const horizontal=end.x-start.x;
+    const direction=horizontal<=0?-1:1;
+    const gap=Math.min(14,Math.abs(horizontal)/3);
+
+    start.x+=direction*gap;
+
+    if(displayLabel(target)!=='EMPTY'){
+      end.x-=direction*gap;
+    }
+
     const dx=end.x-start.x,dy=end.y-start.y;
     const length=Math.hypot(dx,dy);if(length<0.01)continue;
     const side=dx<=0?-1:1;
@@ -2078,7 +2090,17 @@ function createTreeSvg(layout,comments){
       }));
       arrowGroup.append(svgEl('path',{
         d:route.d,fill:'none',stroke:palette.selection,'stroke-width':1.7,
-        'stroke-linecap':'round','stroke-linejoin':'round',
+        'stroke-linecap':'round','stroke-linejoin':'round'
+      }));
+    }
+
+    // Draw arrowheads above all arrow shafts.
+    for(const route of routes){
+      arrowGroup.append(svgEl('path',{
+        d:route.d,
+        fill:'none',
+        stroke:'transparent',
+        'stroke-width':1.7,
         'marker-end':`url(#${markerId})`
       }));
     }
