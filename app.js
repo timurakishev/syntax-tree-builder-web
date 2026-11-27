@@ -267,13 +267,6 @@ function showInstructions(){
       'Build your trees and switch between exercises using Previous, Next, or Go to. Your work is automatically backed up in this browser.'
     ]);
 
-    section('Movement — traces and arrows',[
-      'Select a head or phrase position and open Add/Edit movement. Insert a trace in an empty terminal position: it can replace the selected label or, for heads, appear below the head label.',
-      'Movement arrows are optional. Choose Draw movement arrow, then click the destination node. The arrow does not rearrange the tree or assign words.',
-      'To mark a completed movement chain, select the pronounced constituent, choose Link this constituent to a trace, and click the trace. Repeat to link more traces with the same index.',
-      'Traces never count as worksheet words. Movement indices are separate from binding coindexation in Attach/Edit feature.'
-    ]);
-
     section('Saving and continuing your work',[
       'Download Progress saves the entire worksheet and all your trees as one editable .stb.json file. Download it before finishing, switching devices, or submitting editable work.',
       'Open Progress loads a previously downloaded .stb.json file so you can continue editing.',
