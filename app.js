@@ -125,6 +125,7 @@ function downloadFile(name,content,type){
 function closeMenu(){
   for(const id of ['contextMenu','subMenu']){const menu=$(id);menu.hidden=true;menu.replaceChildren();}
   $('progressMenuBtn')?.setAttribute('aria-expanded','false');
+  $('exportMenuBtn')?.setAttribute('aria-expanded','false');
   menuOpen=false;
 }
 function showSubmenu(anchor,items){
@@ -271,7 +272,7 @@ function showInstructions(){
       'Download Progress saves the entire worksheet and all your trees as one editable .stb.json file. Download it before finishing, switching devices, or submitting editable work.',
       'Open Progress loads a previously downloaded .stb.json file so you can continue editing.',
       'When you reopen the app on the same browser, you may be offered your previous automatic backup. Browser backups can be lost if browser data is cleared, so keep your downloaded progress file.',
-      'Export PNG saves an image of the current tree; it is not an editable progress file.'
+      'Export PNG saves an image of the current tree. Export PDF saves the current tree in Free Mode or all started trees in Practice/Exam Mode. Neither format is an editable progress file.'
     ]);
 
     addDialogButton(footer,'Close',closeDialog,true);
@@ -365,7 +366,7 @@ function updateControls(){
   $('sidebarRedo').disabled=$('floatingRedo').disabled;
   $('sidebarZoomOut').disabled=!ready();
   $('sidebarZoomIn').disabled=!ready();
-  $('pngBtn').disabled=!ready();
+  $('exportMenuBtn').disabled=!ready()||pdfExportBusy;
   $('prevBtn').disabled=mode!=='practice'||!sentences.length||currentIndex<=0;
   $('nextBtn').disabled=mode!=='practice'||!sentences.length||currentIndex>=sentences.length-1;
   $('duplicateBtn').disabled=mode!=='practice'||!sentences.length||sentences.length>=1000;
@@ -1499,10 +1500,9 @@ function formAnnotationWidth(node){
   return form?textWidth(form,'15px Georgia')+34:0;
 }
 
-function layoutTree(){
+function layoutTree(treeRoot=root,text=words()){
   const labelWidths=new Map(),points=new Map();
   const terminals=[],triangles=[],edges=[];
-  const text=words();
 
   // A contour records how far a subtree extends at each depth.
   // Unlike a single bounding width, it lets shallow sisters stay close
@@ -1582,7 +1582,7 @@ function layoutTree(){
     return {contours,positions};
   }
 
-  const tree=build(root);
+  const tree=build(treeRoot);
   const left=Math.min(...tree.contours.filter(Boolean).map(bounds=>bounds.left));
   const right=Math.max(...tree.contours.filter(Boolean).map(bounds=>bounds.right));
   const width=right-left;
@@ -1590,7 +1590,7 @@ function layoutTree(){
   const shiftX=(sceneW-width)/2-left;
   let maxDepth=0;
 
-  for(const node of walk(root)){
+  for(const node of walk(treeRoot)){
     const position=tree.positions.get(node.uid);
     const x=position.x+shiftX;
     const y=TOP+position.depth*V_GAP;
@@ -1632,10 +1632,10 @@ function layoutTree(){
   return {width,maxDepth,points,terminals,triangles,edges,labelWidths,sceneW,sceneH};
 }
 
-function geometryOfTree(layout){
+function geometryOfTree(layout,treeRoot=root){
   let left=Infinity,top=Infinity,right=-Infinity,bottom=-Infinity;
   const add=(a,b,c,d)=>{left=Math.min(left,a);top=Math.min(top,b);right=Math.max(right,c);bottom=Math.max(bottom,d);};
-  for(const node of walk(root)){
+  for(const node of walk(treeRoot)){
     const p=layout.points.get(node.uid),w=layout.labelWidths.get(node.uid);
     add(p.x-w/2,p.y,p.x+w/2,p.y+47);
   }
@@ -1697,12 +1697,12 @@ function wrapComment(text,maxWidth=242){
   }
   return lines;
 }
-function buildComments(layout){
-  const treeArea=geometryOfTree(layout);
+function buildComments(layout,treeRoot=root){
+  const treeArea=geometryOfTree(layout,treeRoot);
   const treeObstacle={left:treeArea.left-20,top:treeArea.top-20,
     right:treeArea.right+20,bottom:treeArea.bottom+20};
   const entries=[],obstacles=[treeObstacle];
-  root.comments.forEach((comment,index)=>{
+  treeRoot.comments.forEach((comment,index)=>{
     const lines=wrapComment(comment.text),h=Math.max(80,lines.length*19+47);
     const fallback={x:treeArea.right+35,y:treeArea.top+20+index*120};
     const start={x:Number.isFinite(+comment.x)?+comment.x:fallback.x,
@@ -1749,23 +1749,24 @@ let movementGeometryKey='';
 const movementPathCache=new Map();
 
 // Compute independent, smooth movement arcs in unscaled tree coordinates.
-function movementRoutes(layout){
-  const nodes=[...walk(root)];
+function movementRoutes(layout,treeRoot=root,useCache=true){
+  const nodes=[...walk(treeRoot)];
+  const cache=useCache?movementPathCache:new Map();
   if(!nodes.some(n=>n.movement_arrows.length))return [];
   const geometryKey=JSON.stringify([
     layout.sceneW,layout.sceneH,[...layout.points],layout.terminals,layout.triangles,layout.edges,
     nodes.map(n=>[n.uid,n.children.map(c=>c.uid),displayLabel(n),displayLabelParts(n),n.trace?.placement])
   ]);
-  if(geometryKey!==movementGeometryKey){
+  if(useCache&&geometryKey!==movementGeometryKey){
     movementGeometryKey=geometryKey;
-    movementPathCache.clear();
+    cache.clear();
   }
   const routes=[];
   const pending=[];
   for(const source of nodes){
     for(const targetId of source.movement_arrows){
       const cacheKey=JSON.stringify([source.uid,targetId]);
-      if(movementPathCache.has(cacheKey))routes.push(movementPathCache.get(cacheKey));
+      if(cache.has(cacheKey))routes.push(cache.get(cacheKey));
       else pending.push({source,targetId,cacheKey});
     }
   }
@@ -2051,29 +2052,48 @@ function movementRoutes(layout){
       // Extra side clearance for unusually tall, narrow or nearly vertical trees.
       for(const scale of [2,3])test(Math.max(24,baseX*scale),baseY*scale,70+scale*10);
     }
-    movementPathCache.set(cacheKey,best);
+    cache.set(cacheKey,best);
   }
-  return nodes.flatMap(n=>n.movement_arrows.map(id=>movementPathCache.get(JSON.stringify([n.uid,id]))).filter(Boolean));
+  return nodes.flatMap(n=>n.movement_arrows.map(id=>cache.get(JSON.stringify([n.uid,id]))).filter(Boolean));
 }
 
-function createTreeSvg(layout,comments){
-  const palette=getTreePalette();
-  const svg=$('treeSvg');svg.replaceChildren();
-  const routes=movementRoutes(layout);
+function createTreeSvg(layout,comments,options={}){
+  const exporting=!!options.svg;
+  const treeRoot=options.treeRoot??root;
+  const palette=options.palette??getTreePalette();
+  const svg=options.svg??$('treeSvg');
+  svg.replaceChildren();
+  const routes=movementRoutes(layout,treeRoot,!exporting);
   const hasMovementArrows=routes.length>0;
-  const maxRight=Math.max(layout.sceneW+(hasMovementArrows?150:0),...comments.map(c=>c.x+c.w+30),...routes.map(r=>r.bounds.r+30));
-  const maxBottom=Math.max(layout.sceneH+(hasMovementArrows?120:0),...comments.map(c=>c.y+c.h+30),...routes.map(r=>r.bounds.b+30));
+  const treeArea=exporting?geometryOfTree(layout,treeRoot):null;
   const arrowPadding=hasMovementArrows?150:0;
-  const minX=Math.min(-arrowPadding,...comments.map(c=>c.x-30),...routes.map(r=>r.bounds.l-30));
-  const minY=Math.min(0,...comments.map(c=>c.y-30),...routes.map(r=>r.bounds.t-30));
+  const maxRight=Math.max(exporting?treeArea.right+30:layout.sceneW+arrowPadding,
+    ...comments.map(c=>c.x+c.w+30),...routes.map(r=>r.bounds.r+30));
+  const maxBottom=Math.max(exporting?treeArea.bottom+30:layout.sceneH+(hasMovementArrows?120:0),
+    ...comments.map(c=>c.y+c.h+30),...routes.map(r=>r.bounds.b+30));
+  const minX=Math.min(exporting?treeArea.left-30:-arrowPadding,
+    ...comments.map(c=>c.x-30),...routes.map(r=>r.bounds.l-30));
+  const minY=Math.min(exporting?treeArea.top-30:0,
+    ...comments.map(c=>c.y-30),...routes.map(r=>r.bounds.t-30));
   const offsetX=-minX,offsetY=-minY;
-  sceneWidth=Math.max(1,maxRight-minX);sceneHeight=Math.max(1,maxBottom-minY);
-  svg.setAttribute('viewBox',`0 0 ${sceneWidth} ${sceneHeight}`);
-  applyZoom();
-  const defs=svgEl('defs');const dots=svgEl('pattern',{id:'dots',width:24,height:24,patternUnits:'userSpaceOnUse'});
-  dots.append(svgEl('circle',{cx:0,cy:0,r:.75,fill:palette.dots}));defs.append(dots);svg.append(defs);
-  svg.append(svgEl('rect',{width:sceneWidth,height:sceneHeight,fill:palette.bg}));
-  svg.append(svgEl('rect',{width:sceneWidth,height:sceneHeight,fill:'url(#dots)'}));
+  const width=Math.max(1,maxRight-minX),height=Math.max(1,maxBottom-minY);
+  svg.setAttribute('viewBox',`0 0 ${width} ${height}`);
+  if(exporting){
+    svg.setAttribute('width',String(width));
+    svg.setAttribute('height',String(height));
+  }else{
+    sceneWidth=width;sceneHeight=height;
+    applyZoom();
+  }
+  const defs=svgEl('defs');
+  svg.append(defs);
+  svg.append(svgEl('rect',{width,height,fill:palette.bg}));
+  if(!exporting){
+    const dots=svgEl('pattern',{id:'dots',width:24,height:24,patternUnits:'userSpaceOnUse'});
+    dots.append(svgEl('circle',{cx:0,cy:0,r:.75,fill:palette.dots}));
+    defs.append(dots);
+    svg.append(svgEl('rect',{width,height,fill:'url(#dots)'}));
+  }
   const content=svgEl('g',{transform:`translate(${offsetX} ${offsetY})`});svg.append(content);
   for(const e of layout.edges){
     content.append(svgEl('line',{x1:e.x1,y1:e.y1,x2:e.x2,y2:e.y2,stroke:palette.edge,'stroke-width':2,'stroke-linecap':'round'}));
@@ -2111,7 +2131,7 @@ function createTreeSvg(layout,comments){
     }
   }
   content.append(arrowGroup);
-  for(const n of walk(root)){
+  for(const n of walk(treeRoot)){
     const point=layout.points.get(n.uid),w=layout.labelWidths.get(n.uid);
     const label=displayLabel(n);
     const parts=displayLabelParts(n);
@@ -2346,6 +2366,101 @@ function changeZoom(factor){
   canvas.scrollLeft=focusX*sceneWidth*zoom-canvas.clientWidth/2;
   canvas.scrollTop=focusY*sceneHeight*zoom-canvas.clientHeight/2;
 }
+let pdfExportBusy=false;
+
+function hasDrawnTree(tree){
+  return !!tree&&(tree.label!=='?'||tree.children.length>0||tree.comments.length>0);
+}
+
+function getPdfEntries(){
+  if(mode==='free'){
+    return [{tree:clone(root),words:[...freeWords],label:'',sentence:''}];
+  }
+  const entries=[];
+  for(let i=0;i<sentences.length;i++){
+    const tree=i===currentIndex?root:workingTrees[i];
+    if(!hasDrawnTree(tree))continue;
+    entries.push({
+      tree:clone(tree),
+      words:tokenize(sentences[i]),
+      label:exerciseIds[i],
+      sentence:sentences[i]
+    });
+  }
+  return entries;
+}
+
+function renderPdfTree(entry){
+  const layout=layoutTree(entry.tree,entry.words);
+  const comments=buildComments(layout,entry.tree);
+  const svg=svgEl('svg');
+  svg.setAttribute('xmlns',NS);
+  const palette={
+    bg:'#ffffff',ink:'#202620',terminal:'#202620',edge:'#49534a',
+    selection:'#557146',hover:'#96a98d',dots:'#ffffff',
+    commentBg:'#f1f4e9',commentBorder:'#a9bb8a',commentTitle:'#53693b'
+  };
+  createTreeSvg(layout,comments,{svg,treeRoot:entry.tree,palette});
+  svg.querySelectorAll('.selection-frame,.hover-frame,.hit').forEach(el=>el.remove());
+  return svg;
+}
+
+function exportPDF(){
+  if(!ready()||pdfExportBusy)return;
+  const practice=mode==='practice';
+  const entries=getPdfEntries();
+  if(!entries.length){
+    alertDialog('Export PDF','Draw at least one tree before exporting the worksheet.');
+    return;
+  }
+  const title=practice?bankName:'Syntax Tree';
+  showDialog('Export PDF',(body,footer)=>{
+    const note=document.createElement('p');
+    note.textContent=practice
+      ?`Export ${entries.length} started tree${entries.length===1?'':'s'} in worksheet order, including duplicates. Unstarted exercises will be omitted.`
+      :'Export the current tree as a one-page PDF.';
+    body.append(note);
+    const addField=(caption,maxLength)=>{
+      const label=document.createElement('label');
+      label.className='field-label';
+      label.textContent=caption;
+      const input=document.createElement('input');
+      input.type='text';input.maxLength=maxLength;input.autocomplete='off';
+      input.setAttribute('aria-label',caption);
+      label.style.display='block';
+      body.append(label,input);
+      return input;
+    };
+    const name=addField('Full name (optional)',100);
+    const studentId=addField('Student ID (optional)',40);
+    addDialogButton(footer,'Cancel',closeDialog);
+    addDialogButton(footer,'Download PDF',async()=>{
+      if(pdfExportBusy)return;
+      const identity={name:name.value.trim(),studentId:studentId.value.trim()};
+      closeDialog();
+      pdfExportBusy=true;
+      $('exportMenuBtn').disabled=true;
+      try{
+        const {buildTreePDF}=await import('./pdf-export.js');
+        const blob=await buildTreePDF({
+          entries,title,practice,identity,renderTree:renderPdfTree,
+          onProgress:(done,total)=>setInfo(`Preparing PDF: ${done}/${total} trees`,15000)
+        });
+        const base=practice?title:'syntax_tree';
+        const filename=(base.replace(/[\\/:*?"<>|\x00-\x1f]/g,'_').trim()||'syntax_trees')+'.pdf';
+        downloadFile(filename,blob,'application/pdf');
+        setInfo(`PDF exported: ${filename}`);
+      }catch(error){
+        await alertDialog('Export failed',error.message||String(error));
+      }finally{
+        pdfExportBusy=false;
+        $('exportMenuBtn').disabled=!ready();
+      }
+    },true);
+    requestAnimationFrame(()=>name.focus());
+  });
+}
+
 async function exportPNG(){
   if(!ready())return;
   const svg=$('treeSvg'),rect=svg.viewBox.baseVal,w=Math.round(rect.width*2),h=Math.round(rect.height*2);
@@ -2554,13 +2669,24 @@ function init(){
   $('openFile').onchange=async event=>{
     const file=event.target.files[0];event.target.value='';if(file)await openProgress(file);
   };
-  $('pngBtn').onclick=exportPNG;
+  $('exportMenuBtn').onclick=()=>{
+    const button=$('exportMenuBtn');
+    if(button.getAttribute('aria-expanded')==='true'){
+      closeMenu();
+      return;
+    }
+    showMenu(button,[
+      {label:'Export PNG',action:exportPNG},
+      {label:'Export PDF',action:exportPDF}
+    ]);
+    button.setAttribute('aria-expanded','true');
+  };
   document.addEventListener('syntax-tree-theme-change',()=>drawTree());
   $('overlay').addEventListener('click',event=>{
     if(event.target===$('overlay'))$('closeDialog').click();
   });
   document.addEventListener('pointerdown',event=>{
-    if(menuOpen&&!event.target.closest('#contextMenu,#subMenu,#progressMenuBtn'))closeMenu();
+    if(menuOpen&&!event.target.closest('#contextMenu,#subMenu,#progressMenuBtn,#exportMenuBtn'))closeMenu();
   },true);
   document.addEventListener('keydown',event=>{
     if(event.key==='Escape'){
