@@ -1906,36 +1906,41 @@ function movementRoutes(layout){
       let path;
 
       if(underpass){
-        // Keep the chosen bottom depth, but use a circular lower half.
-        const peak=underpass;
-        const radius=Math.max(1,Math.min(
-          Math.abs(peak.x-start.x),Math.abs(end.x-peak.x),
-          peak.y-Math.max(start.y,end.y)-8
-        ));
-        const cy=peak.y-radius;
-        const entry={x:peak.x-side*radius,y:cy};
-        const exit={x:peak.x+side*radius,y:cy};
-        const inHeight=cy-start.y,outHeight=cy-end.y;
-        const c1={x:start.x,y:start.y+inHeight*0.45};
-        const c2={x:entry.x,y:cy-inHeight*0.35};
-        const c3={x:exit.x,y:cy-outHeight*0.35};
-        const c4={x:end.x,y:end.y+outHeight*0.45};
+        // Straight vertical sides tangent to a true semicircle.
+        const radius=Math.abs(dx)/2;
+        const peak={
+          x:m.x,
+          y:Math.max(
+            underpass.y,
+            Math.max(start.y,end.y)+radius+8
+          )
+        };
 
-        // Sample the actual semicircle for collision detection.
-        flatten(start,c1,c2,entry,points);
-        const steps=2*Math.max(8,Math.ceil(Math.PI/(4*Math.acos(1-0.5/radius))));
+        const cy=peak.y-radius;
+        const entry={x:start.x,y:cy};
+        const exit={x:end.x,y:cy};
+
+        points.push(entry);
+
+        const steps=2*Math.max(8,
+          Math.ceil(Math.PI/(4*Math.acos(1-0.5/radius)))
+        );
+
         for(let i=1;i<=steps;i++){
           const angle=Math.PI*i/steps;
+
           points.push(i===steps?exit:{
             x:peak.x-side*radius*Math.cos(angle),
             y:cy+radius*Math.sin(angle)
           });
         }
-        flatten(exit,c3,c4,end,points);
-        path=`M${xy(start)} C${xy(c1)} ${xy(c2)} ${xy(entry)} `+
+
+        points.push(end);
+
+        path=`M${xy(start)} L${xy(entry)} `+
           `A${rounded(radius)} ${rounded(radius)} 0 0 ${side<0?1:0} ${xy(exit)} `+
-          `C${xy(c3)} ${xy(c4)} ${xy(end)}`;
-      }else{
+          `L${xy(end)}`;
+        
         // Preserve ordinary movement arrows.
         const peak=add(m,bow);
         const c1=add(start,bow,k),c2=add(peak,h,-k);
@@ -1984,12 +1989,11 @@ function movementRoutes(layout){
       const between=[...obstacles,...branches.map(e=>e.box)].filter(o=>
         o.l>left+1&&o.r<right-1);
       const lowest=between.reduce((b,o)=>Math.max(b,o.b),Math.max(start.y,end.y));
-      const deep=between.filter(o=>o.b>=lowest-35);
-      const lowX=deep.length
-        ?(Math.min(...deep.map(o=>o.l))+Math.max(...deep.map(o=>o.r)))/2:m.x;
-      const xMin=left+(right-left)*0.2,xMax=right-(right-left)*0.2;
-      const centers=[...new Set([m.x,Math.max(xMin,Math.min(xMax,lowX))])];
-      const floor=lowest+12;
+      const centers=[m.x];
+      const floor=Math.max(
+        lowest+12,
+        Math.max(start.y,end.y)+Math.abs(dx)/2+8
+      );
       for(const x of centers){
         let lo=floor;
         for(const extra of [0,16,32,64,112,180]){
@@ -2089,7 +2093,7 @@ function createTreeSvg(layout,comments){
         'stroke-linecap':'round','stroke-linejoin':'round'
       }));
       arrowGroup.append(svgEl('path',{
-        d:route.d,fill:'none',stroke:palette.selection,'stroke-width':1.7,
+        d:route.d,fill:'none',stroke:palette.selection,'stroke-width':1.4,
         'stroke-linecap':'round','stroke-linejoin':'round'
       }));
     }
