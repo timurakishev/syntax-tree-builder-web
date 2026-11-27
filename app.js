@@ -1888,25 +1888,51 @@ function movementRoutes(layout){
     }
     const obstacles=[...boxes,...protectedBoxes];
     let best=null;
-    const test=(bx,by,preference,underpass=null)=>{
-      // Two quarter-ellipse cubics with matching tangents at the midpoint.
-      // The bow is always toward the movement side and/or downward.
+       const test=(bx,by,preference,underpass=null)=>{
       const bow={x:side*bx,y:by},k=0.5522847498;
-      let peak=add(m,bow);
-      let c1=add(start,bow,k),c2=add(peak,h,-k);
-      let c3=add(peak,h,k),c4=add(end,bow,k);
-      if(underpass){
-        // Two rounded shoulders meet at the actual lowest point.
-        // Unlike a tilted ellipse, this keeps the bottom at the chosen depth.
-        peak={x:underpass.x,y:underpass.y};
-        const shoulder=0.88;
-        c1={x:start.x,y:start.y+shoulder*(peak.y-start.y)};
-        c2={x:peak.x+shoulder*(start.x-peak.x),y:peak.y};
-        c3={x:peak.x+shoulder*(end.x-peak.x),y:peak.y};
-        c4={x:end.x,y:end.y+shoulder*(peak.y-end.y)};
-      }
       const points=[start];
-      flatten(start,c1,c2,peak,points);flatten(peak,c3,c4,end,points);
+      let path;
+
+      if(underpass){
+        // Keep the chosen bottom depth, but use a circular lower half.
+        const peak=underpass;
+        const radius=Math.max(1,Math.min(
+          Math.abs(peak.x-start.x),Math.abs(end.x-peak.x),
+          peak.y-Math.max(start.y,end.y)-8
+        ));
+        const cy=peak.y-radius;
+        const entry={x:peak.x-side*radius,y:cy};
+        const exit={x:peak.x+side*radius,y:cy};
+        const inHeight=cy-start.y,outHeight=cy-end.y;
+        const c1={x:start.x,y:start.y+inHeight*0.45};
+        const c2={x:entry.x,y:cy-inHeight*0.35};
+        const c3={x:exit.x,y:cy-outHeight*0.35};
+        const c4={x:end.x,y:end.y+outHeight*0.45};
+
+        // Sample the actual semicircle for collision detection.
+        flatten(start,c1,c2,entry,points);
+        const steps=2*Math.max(8,Math.ceil(Math.PI/(4*Math.acos(1-0.5/radius))));
+        for(let i=1;i<=steps;i++){
+          const angle=Math.PI*i/steps;
+          points.push(i===steps?exit:{
+            x:peak.x-side*radius*Math.cos(angle),
+            y:cy+radius*Math.sin(angle)
+          });
+        }
+        flatten(exit,c3,c4,end,points);
+        path=`M${xy(start)} C${xy(c1)} ${xy(c2)} ${xy(entry)} `+
+          `A${rounded(radius)} ${rounded(radius)} 0 0 ${side<0?1:0} ${xy(exit)} `+
+          `C${xy(c3)} ${xy(c4)} ${xy(end)}`;
+      }else{
+        // Preserve ordinary movement arrows.
+        const peak=add(m,bow);
+        const c1=add(start,bow,k),c2=add(peak,h,-k);
+        const c3=add(peak,h,k),c4=add(end,bow,k);
+        flatten(start,c1,c2,peak,points);
+        flatten(peak,c3,c4,end,points);
+        path=`M${xy(start)} C${xy(c1)} ${xy(c2)} ${xy(peak)} `+
+          `C${xy(c3)} ${xy(c4)} ${xy(end)}`;
+      }
       let b=rect(start.x,start.x,start.y,start.y);
       for(const p of points)b=union(b,rect(p.x,p.x,p.y,p.y));
       const broad=pad(b,2);
@@ -1923,7 +1949,7 @@ function movementRoutes(layout){
       }
       const score=preference+Math.max(0,b.b-Math.max(start.y,end.y))*0.6+
         Math.max(0,left-b.l,b.r-right)*0.35;
-      const candidate={d:`M${xy(start)} C${xy(c1)} ${xy(c2)} ${xy(peak)} C${xy(c3)} ${xy(c4)} ${xy(end)}`,
+      const candidate={d:path,
         bounds:b,hits:touched.size,score};
       if(!best||candidate.hits<best.hits||(candidate.hits===best.hits&&score<best.score))best=candidate;
       return candidate;
@@ -1950,7 +1976,7 @@ function movementRoutes(layout){
       const lowX=deep.length
         ?(Math.min(...deep.map(o=>o.l))+Math.max(...deep.map(o=>o.r)))/2:m.x;
       const xMin=left+(right-left)*0.2,xMax=right-(right-left)*0.2;
-      const centers=[...new Set([Math.max(xMin,Math.min(xMax,lowX)),m.x])];
+      const centers=[...new Set([m.x,Math.max(xMin,Math.min(xMax,lowX))])];
       const floor=lowest+12;
       for(const x of centers){
         let lo=floor;
